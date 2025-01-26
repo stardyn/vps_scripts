@@ -1,4 +1,5 @@
 #!/bin/bash
+#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/proxmox_setup.sh && dos2unix proxmox_setup.sh && chmod +x proxmox_setup.sh && ./proxmox_setup.sh
 
 # Root yetkisi kontrolü ve yükseltme
 if [ "$EUID" -ne 0 ]; then
@@ -26,6 +27,7 @@ install_packages() {
         nano \
         htop \
         net-tools \
+        mc \
         software-properties-common \
         ca-certificates \
         gnupg \
