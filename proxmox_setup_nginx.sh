@@ -32,11 +32,31 @@ if command -v ufw >/dev/null 2>&1; then
     ufw allow 443/tcp
 fi
 
-# Web dizini oluştur
+# Web ve FTP için ortak grup oluştur
+echo "Ortak grup oluşturuluyor..."
+groupadd -f web-ftp-users
+
+# www-data kullanıcısını gruba ekle
+usermod -a -G web-ftp-users www-data
+
+# FTP kullanıcısını gruba ekle (eğer varsa)
+if id "yonetici" &>/dev/null; then
+    usermod -a -G web-ftp-users yonetici
+fi
+
+# Web dizini oluştur ve yetkilendir
 echo "Web dizini oluşturuluyor..."
 mkdir -p /srv
-chown -R www-data:www-data /srv
-chmod -R 755 /srv
+chown www-data:web-ftp-users /srv
+chmod 775 /srv
+chmod g+s /srv  # Yeni oluşturulan dosyalar grup sahipliğini devralır
+
+# ACL kuralları ekle (eğer ACL destekleniyorsa)
+if command -v setfacl >/dev/null 2>&1; then
+    apt-get install -y acl
+    setfacl -R -m g:web-ftp-users:rwx /srv
+    setfacl -R -d -m g:web-ftp-users:rwx /srv
+fi
 
 # Örnek index.html oluştur
 cat > /srv/index.html << 'EOL'
@@ -64,6 +84,10 @@ cat > /srv/index.html << 'EOL'
 </body>
 </html>
 EOL
+
+# Örnek dosya yetkilerini ayarla
+chown www-data:web-ftp-users /srv/index.html
+chmod 664 /srv/index.html
 
 # Nginx varsayılan site yapılandırması
 cat > /etc/nginx/sites-available/default << 'EOL'
@@ -154,5 +178,12 @@ systemctl restart nginx
 echo "Nginx kurulumu tamamlandı!"
 echo "Web sunucusu IP adresi: $(curl -s ifconfig.me)"
 echo "Web dizini: /srv"
+echo "Dizin yetkileri:"
+ls -la /srv
+echo "Grup üyelikleri:"
+groups www-data
+if id "yonetici" &>/dev/null; then
+    groups yonetici
+fi
 echo "Nginx durum kontrolü:"
 systemctl status nginx --no-pager
