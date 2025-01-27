@@ -62,15 +62,16 @@ install_ftp_web() {
     sed -i "s/^#\?write_enable=.*/write_enable=YES/" /etc/vsftpd.conf
     sed -i "s/^#\?local_umask=.*/local_umask=022/" /etc/vsftpd.conf
     sed -i "s/^#\?chroot_local_user=.*/chroot_local_user=YES/" /etc/vsftpd.conf
-    sed -i "s/^#\?allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
     
     # Pasif mod ayarları
     grep -q "^pasv_enable=" /etc/vsftpd.conf || echo "pasv_enable=YES" >> /etc/vsftpd.conf
     grep -q "^pasv_min_port=" /etc/vsftpd.conf || echo "pasv_min_port=30000" >> /etc/vsftpd.conf
     grep -q "^pasv_max_port=" /etc/vsftpd.conf || echo "pasv_max_port=30400" >> /etc/vsftpd.conf
     
-    # Root dizini ayarı
+    # Root dizini ve güvenlik ayarları
     grep -q "^local_root=" /etc/vsftpd.conf || echo "local_root=/srv/sites" >> /etc/vsftpd.conf
+    grep -q "^user_sub_token=" /etc/vsftpd.conf || echo "user_sub_token=\$USER" >> /etc/vsftpd.conf
+    grep -q "^allow_writeable_chroot=" /etc/vsftpd.conf || echo "allow_writeable_chroot=YES" >> /etc/vsftpd.conf
     
     # /etc/shells düzenleme
     echo "Shells yapılandırılıyor..."
@@ -80,16 +81,22 @@ install_ftp_web() {
     echo "FTP kullanıcıları ayarlanıyor..."
     groupadd ftp-users 2>/dev/null || true
     
-    # Önce dizini oluştur
+    # Ana dizin yapısını oluştur
     mkdir -p /srv/sites
+    
+    # Önce root sahipliğinde oluştur
+    chown root:root /srv/sites
+    chmod 755 /srv/sites
+    
+    # Alt dizini kullanıcı için oluştur
+    mkdir -p /srv/sites/web
     
     useradd yonetici --home-dir /srv/sites --gid ftp-users --create-home --no-user-group --shell /usr/sbin/nologin
     echo "yonetici:202300" | chpasswd
     
-    # FTP dizini yetkilendirme
-    echo "FTP dizini yetkilendiriliyor..."
-    chown -R yonetici:ftp-users /srv/sites
-    chmod 750 /srv/sites
+    # Sadece alt dizine yazma izni ver
+    chown -R yonetici:ftp-users /srv/sites/web
+    chmod 755 /srv/sites/web
     
     # VSFTPD yeniden başlat
     systemctl restart vsftpd
