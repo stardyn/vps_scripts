@@ -55,15 +55,15 @@ install_ftp_web() {
     DEBIAN_FRONTEND=noninteractive apt-get install -y vsftpd
     
     # VSFTPD yapılandırması
-    echo "VSFTPD yapılandırılıyor..."
-    sed -i "s/^listen=.*/listen=NO/" /etc/vsftpd.conf
-    sed -i "s/^listen_ipv6=.*/listen_ipv6=YES/" /etc/vsftpd.conf
-    sed -i "s/^anonymous_enable=.*/anonymous_enable=NO/" /etc/vsftpd.conf
-    sed -i "s/^local_enable=.*/local_enable=YES/" /etc/vsftpd.conf
-    sed -i "s/^write_enable=.*/write_enable=YES/" /etc/vsftpd.conf
-    sed -i "s/^local_umask=.*/local_umask=022/" /etc/vsftpd.conf
-    sed -i "s/^chroot_local_user=.*/chroot_local_user=YES/" /etc/vsftpd.conf
-    sed -i "s/^allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
+	echo "VSFTPD yapılandırılıyor..."
+	sed -i "s/^#\?listen=.*/listen=NO/" /etc/vsftpd.conf
+	sed -i "s/^#\?listen_ipv6=.*/listen_ipv6=YES/" /etc/vsftpd.conf
+	sed -i "s/^#\?anonymous_enable=.*/anonymous_enable=NO/" /etc/vsftpd.conf
+	sed -i "s/^#\?local_enable=.*/local_enable=YES/" /etc/vsftpd.conf
+	sed -i "s/^#\?write_enable=.*/write_enable=YES/" /etc/vsftpd.conf
+	sed -i "s/^#\?local_umask=.*/local_umask=022/" /etc/vsftpd.conf
+	sed -i "s/^#\?chroot_local_user=.*/chroot_local_user=YES/" /etc/vsftpd.conf
+	sed -i "s/^#\?allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
     
     # Pasif mod ayarları
     grep -q "^pasv_enable=" /etc/vsftpd.conf || echo "pasv_enable=YES" >> /etc/vsftpd.conf
