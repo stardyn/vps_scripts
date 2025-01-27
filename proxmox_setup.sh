@@ -63,7 +63,7 @@ install_ftp_web() {
 	sed -i "s/^#\?write_enable=.*/write_enable=YES/" /etc/vsftpd.conf
 	sed -i "s/^#\?local_umask=.*/local_umask=022/" /etc/vsftpd.conf
 	sed -i "s/^#\?chroot_local_user=.*/chroot_local_user=YES/" /etc/vsftpd.conf
-	# sed -i "s/^#\?allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
+	sed -i "s/^#\?allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
     
     # Pasif mod ayarları
     grep -q "^pasv_enable=" /etc/vsftpd.conf || echo "pasv_enable=YES" >> /etc/vsftpd.conf
@@ -77,12 +77,12 @@ install_ftp_web() {
     # FTP kullanıcı grubu ve yönetici oluşturma
     echo "FTP kullanıcıları ayarlanıyor..."
     groupadd ftp-users
-	useradd yonetici --home-dir /srv --gid ftp-users --create-home --no-user-group --shell /usr/sbin/nologin
+	useradd yonetici --home-dir /srv/sites --gid ftp-users --create-home --no-user-group --shell /usr/sbin/nologin
     echo "yonetici:202300" | chpasswd
     
     # FTP dizini oluştur ve yetkilendir
     echo "FTP dizini oluşturuluyor ve yetkilendiriliyor..."
-	chown yonetici -R /srv
+	chown yonetici -R /srv/sites
     
     # VSFTPD yeniden başlat
     systemctl restart vsftpd
@@ -90,7 +90,7 @@ install_ftp_web() {
     echo "FTP kurulumu tamamlandı."
     echo "FTP yönetici kullanıcı adı: yonetici"
     echo "FTP yönetici şifresi: 202300"
-    echo "FTP dizini: /srv"
+    echo "FTP dizini: /srv/sites"
 }
 
 # Ana fonksiyon
