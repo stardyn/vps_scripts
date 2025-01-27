@@ -60,6 +60,7 @@ EOF
     # Dosya izinlerini ayarla
     #chown -R www-data:www-data "/srv/sites/$domain_name"
     #chmod -R 755 "/srv/sites/$domain_name"
+	chown -R yonetici /srv
 }
 
 # Fonksiyon: Domain Ekle
