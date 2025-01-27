@@ -96,11 +96,11 @@ install_ftp_web() {
     
     # Sadece alt dizine yazma izni ver
     chown -R yonetici:ftp-users /srv/sites/web
-    chmod 755 /srv/sites/web
-    chown yonetici -R /srv 
+    chmod 755 /srv/sites/web    
 	
     # VSFTPD yeniden başlat
     systemctl restart vsftpd
+	chown yonetici -R /srv 
     
     echo "FTP kurulumu tamamlandı."
     echo "FTP yönetici kullanıcı adı: yonetici"
