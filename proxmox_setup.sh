@@ -82,7 +82,10 @@ install_ftp_web() {
     
     # FTP dizini oluştur ve yetkilendir
     echo "FTP dizini oluşturuluyor ve yetkilendiriliyor..."
-	chown yonetici -R /srv/sites
+	echo "user_sub_token=\$USER" >> /etc/vsftpd.conf
+	echo "local_root=/srv/\$USER" >> /etc/vsftpd.conf	
+	chown -R yonetici:ftp-users /srv/sites
+	chmod 750 /srv/sites
     
     # VSFTPD yeniden başlat
     systemctl restart vsftpd
