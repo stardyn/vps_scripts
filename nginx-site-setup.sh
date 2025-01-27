@@ -6,6 +6,62 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Fonksiyon: Index.html oluştur
+create_index() {
+    local domain_name=$1
+    local index_file="/srv/sites/$domain_name/www/index.html"
+    
+    cat > $index_file << EOF
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$domain_name</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 20px;
+        }
+        p {
+            color: #5f6368;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hoş Geldiniz</h1>
+        <p>$domain_name sitesi kurulumu başarıyla tamamlandı.</p>
+        <p>Bu sayfa otomatik olarak oluşturulmuştur.</p>
+    </div>
+</body>
+</html>
+EOF
+
+    echo "Index.html dosyası oluşturuldu: $index_file"
+    # Dosya izinlerini ayarla
+    #chown -R www-data:www-data "/srv/sites/$domain_name"
+    #chmod -R 755 "/srv/sites/$domain_name"
+}
+
 # Fonksiyon: Domain Ekle
 add_domain() {
     local domain_name=$1
@@ -13,6 +69,9 @@ add_domain() {
     # Dizinleri oluştur
     echo "Dizinler oluşturuluyor..."
     mkdir -p /srv/sites/$domain_name/www
+
+    # Index.html dosyasını oluştur
+    create_index $domain_name
 
     # Nginx konfigürasyon dosyasını oluştur
     config_file="/srv/sites/$domain_name/www/site_nginx.conf"
@@ -29,8 +88,8 @@ EOF
 
     # Symbolic linkleri oluştur
     echo "Symbolic linkler oluşturuluyor..."
-    ln -s $config_file /etc/nginx/sites-available/$domain_name
-    ln -s $config_file /etc/nginx/sites-enabled/$domain_name
+    ln -s /srv/sites/$domain_name/www/site_nginx.conf /etc/nginx/sites-available/$domain_name
+    ln -s /srv/sites/$domain_name/www/site_nginx.conf /etc/nginx/sites-enabled/$domain_name
 
     # Nginx konfigürasyonunu test et
     echo "Nginx konfigürasyonu test ediliyor..."
@@ -69,11 +128,11 @@ remove_domain() {
         rm "/etc/nginx/sites-available/$domain_name"
     fi
     
-    # Domain dizinini sil
-  #  if [ -d "/srv/sites/$domain_name" ]; then
-  #      rm -rf "/srv/sites/$domain_name"
-  #      echo "Domain dizini silindi: /srv/sites/$domain_name"
-  #  fi
+    # Domain dizinini silme seçeneği devre dışı
+    # if [ -d "/srv/sites/$domain_name" ]; then
+    #     rm -rf "/srv/sites/$domain_name"
+    #     echo "Domain dizini silindi: /srv/sites/$domain_name"
+    # fi
     
     # Nginx'i yeniden yükle
     echo "Nginx yeniden yükleniyor..."
