@@ -74,7 +74,7 @@ add_domain() {
     create_index $domain_name
 
     # Nginx konfigürasyon dosyasını oluştur
-    config_file="/srv/sites/$domain_name/www/site_nginx.conf"
+    config_file="/srv/sites/$domain_name/site_nginx.conf"
     echo "Nginx konfigürasyonu oluşturuluyor..."
 
     cat > $config_file << EOF
@@ -88,8 +88,8 @@ EOF
 
     # Symbolic linkleri oluştur
     echo "Symbolic linkler oluşturuluyor..."
-    ln -s /srv/sites/$domain_name/www/site_nginx.conf /etc/nginx/sites-available/$domain_name
-    ln -s /srv/sites/$domain_name/www/site_nginx.conf /etc/nginx/sites-enabled/$domain_name
+    ln -s /srv/sites/$domain_name/site_nginx.conf /etc/nginx/sites-available/$domain_name
+    ln -s /srv/sites/$domain_name/site_nginx.conf /etc/nginx/sites-enabled/$domain_name
 
     # Nginx konfigürasyonunu test et
     echo "Nginx konfigürasyonu test ediliyor..."
