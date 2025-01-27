@@ -56,14 +56,14 @@ install_ftp_web() {
     
     # VSFTPD yapılandırması
 	echo "VSFTPD yapılandırılıyor..."
-	sed -i "s/^#\?listen=.*/listen=NO/" /etc/vsftpd.conf
+	#sed -i "s/^#\?listen=.*/listen=NO/" /etc/vsftpd.conf
 	sed -i "s/^#\?listen_ipv6=.*/listen_ipv6=YES/" /etc/vsftpd.conf
 	sed -i "s/^#\?anonymous_enable=.*/anonymous_enable=NO/" /etc/vsftpd.conf
 	sed -i "s/^#\?local_enable=.*/local_enable=YES/" /etc/vsftpd.conf
 	sed -i "s/^#\?write_enable=.*/write_enable=YES/" /etc/vsftpd.conf
 	sed -i "s/^#\?local_umask=.*/local_umask=022/" /etc/vsftpd.conf
 	sed -i "s/^#\?chroot_local_user=.*/chroot_local_user=YES/" /etc/vsftpd.conf
-	sed -i "s/^#\?allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
+	# sed -i "s/^#\?allow_writeable_chroot=.*/allow_writeable_chroot=YES/" /etc/vsftpd.conf
     
     # Pasif mod ayarları
     grep -q "^pasv_enable=" /etc/vsftpd.conf || echo "pasv_enable=YES" >> /etc/vsftpd.conf
@@ -76,14 +76,13 @@ install_ftp_web() {
     
     # FTP kullanıcı grubu ve yönetici oluşturma
     echo "FTP kullanıcıları ayarlanıyor..."
-    groupadd -f ftp-users
-    useradd -M yonetici -g ftp-users -s /usr/sbin/nologin -d /srv/ftp 2>/dev/null || true
+    groupadd ftp-users
+	useradd yonetici --home-dir /srv --gid ftp-users --create-home --no-user-group --shell /usr/sbin/nologin
     echo "yonetici:202300" | chpasswd
     
     # FTP dizini oluştur ve yetkilendir
     echo "FTP dizini oluşturuluyor ve yetkilendiriliyor..."
-    chown -R yonetici:ftp-users /srv
-    chmod -R 775 /srv
+	chown yonetici -R /srv
     
     # VSFTPD yeniden başlat
     systemctl restart vsftpd
