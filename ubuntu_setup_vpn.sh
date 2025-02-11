@@ -118,7 +118,7 @@ detect_network_interface() {
     fi
     
     # Public IP adresini tespit et
-    SERVER_IP=$(curl -s ifconfig.me)
+	SERVER_IP=$(curl -s icanhazip.com)
     
     echo "Tespit edilen network interface: $PRIMARY_INTERFACE"
     echo "Sunucu Public IP adresi: $SERVER_IP"
