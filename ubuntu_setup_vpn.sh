@@ -24,10 +24,11 @@
 #    ./ubuntu_setup_vpn.sh
 #
 # 2. Tüm Trafik VPN Üzerinden:
-#    ./ubuntu_setup_vpn.sh --all-traffic
+#    ./ubuntu_setup_vpn.sh --all-traffic  --route=10.12.10.0/24 --route=192.168.0.0/16 --route=172.26.0.0/16
 #
 # 3. Tüm Trafik + Firewall Kapalı:
 #    ./ubuntu_setup_vpn.sh --all-traffic --no-firewall
+#    ./ubuntu_setup_vpn.sh --all-traffic --no-firewall --route=10.12.10.0/24 --route=192.168.0.0/16 --route=172.26.0.0/16
 #
 # 4. Özel Ağlar İçin:
 #    ./ubuntu_setup_vpn.sh --route=10.10.10.0/24 --route=192.168.0.0/16
@@ -181,7 +182,7 @@ EOF
     sed -i "s/^ipv4-netmask =.*/ipv4-netmask = $VPN_NETMASK/" /etc/ocserv/ocserv.conf
     
     # DNS ve MTU ayarları
-    sed -i "s/^#mtu.*/mtu = 1420/" /etc/ocserv/ocserv.conf
+    sed -i "s/^#mtu.*/mtu = 1480/" /etc/ocserv/ocserv.conf
     
     # DNS ayarları ekle
     sed -i "/^dns = /d" /etc/ocserv/ocserv.conf
