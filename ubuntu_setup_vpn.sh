@@ -24,11 +24,10 @@
 #    ./ubuntu_setup_vpn.sh
 #
 # 2. Tüm Trafik VPN Üzerinden:
-#    ./ubuntu_setup_vpn.sh --all-traffic  --route=10.12.10.0/24 --route=192.168.0.0/16 --route=172.26.0.0/16
+#    ./ubuntu_setup_vpn.sh --all-traffic
 #
 # 3. Tüm Trafik + Firewall Kapalı:
 #    ./ubuntu_setup_vpn.sh --all-traffic --no-firewall
-#    ./ubuntu_setup_vpn.sh --all-traffic --no-firewall --route=10.12.10.0/24 --route=192.168.0.0/16 --route=172.26.0.0/16
 #
 # 4. Özel Ağlar İçin:
 #    ./ubuntu_setup_vpn.sh --route=10.10.10.0/24 --route=192.168.0.0/16
@@ -164,6 +163,9 @@ EOF
     # OCServ yapılandırması
     echo "OCServ yapılandırılıyor..."
     
+    # Yedek oluştur
+    cp /etc/ocserv/ocserv.conf /etc/ocserv/ocserv.conf.bak
+    
     # Ana ayarlar
     sed -i "s/^auth =.*/auth = \"plain[passwd=\/etc\/ocserv\/ocpasswd]\"/" /etc/ocserv/ocserv.conf
     sed -i "s/^tcp-port =.*/tcp-port = $VPN_PORT/" /etc/ocserv/ocserv.conf
@@ -182,7 +184,19 @@ EOF
     sed -i "s/^ipv4-netmask =.*/ipv4-netmask = $VPN_NETMASK/" /etc/ocserv/ocserv.conf
     
     # DNS ve MTU ayarları
-    sed -i "s/^#mtu.*/mtu = 1480/" /etc/ocserv/ocserv.conf
+    sed -i "s/^#\?mtu =.*/mtu = 1480/" /etc/ocserv/ocserv.conf
+    
+    # max-clients ayarı
+    sed -i "s/^#\?max-clients =.*/max-clients = 16/" /etc/ocserv/ocserv.conf
+    sed -i "s/^#\?max-same-clients =.*/max-same-clients = 2/" /etc/ocserv/ocserv.conf
+    
+    # Keepalive ayarları
+    sed -i "s/^#\?keepalive =.*/keepalive = 32400/" /etc/ocserv/ocserv.conf
+    sed -i "s/^#\?dpd =.*/dpd = 90/" /etc/ocserv/ocserv.conf
+    sed -i "s/^#\?mobile-dpd =.*/mobile-dpd = 1800/" /etc/ocserv/ocserv.conf
+    
+    # Session timeout
+    sed -i "s/^#\?session-timeout =.*/session-timeout = 86400/" /etc/ocserv/ocserv.conf
     
     # DNS ayarları ekle
     sed -i "/^dns = /d" /etc/ocserv/ocserv.conf
@@ -257,6 +271,12 @@ EOF
     # OCServ servisini başlat
     systemctl enable ocserv
     systemctl restart ocserv
+
+    # Yeniden başlatma sonrası ayarların kalıcı olması için
+    if [ -f /etc/networkd-dispatcher/routable.d/50-ifup-hooks ]; then
+        echo "iptables-restore < /etc/iptables/rules.v4" >> /etc/networkd-dispatcher/routable.d/50-ifup-hooks
+        chmod +x /etc/networkd-dispatcher/routable.d/50-ifup-hooks
+    fi
 
     echo "VPN kurulumu tamamlandı!"
     echo "========================="
