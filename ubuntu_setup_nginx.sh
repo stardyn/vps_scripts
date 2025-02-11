@@ -1,4 +1,5 @@
 #!/bin/bash
+#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_nginx.sh && dos2unix ubuntu_setup_nginx.sh && chmod +x ubuntu_setup_nginx.sh && ./ubuntu_setup_nginx.sh
 
 # Root yetkisi kontrolü ve yükseltme
 if [ "$EUID" -ne 0 ]; then
@@ -24,12 +25,12 @@ echo "Nginx servisi başlatılıyor..."
 systemctl start nginx
 systemctl enable nginx
 
-# Firewall kuralları (eğer UFW yüklüyse)
+# UFW kontrolü ve devre dışı bırakma
 if command -v ufw >/dev/null 2>&1; then
-    echo "Firewall kuralları ekleniyor..."
-    ufw allow 'Nginx Full'
-    ufw allow 80/tcp
-    ufw allow 443/tcp
+	echo "UFW tespit edildi, devre dışı bırakılıyor..."
+	systemctl disable ufw
+	systemctl stop ufw
+	apt-get remove -y ufw
 fi
 
 # Web dizini oluştur ve yetkilendir
