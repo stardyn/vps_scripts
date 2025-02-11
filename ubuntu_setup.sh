@@ -1,5 +1,5 @@
 #!/bin/bash
-#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/proxmox_setup.sh && dos2unix proxmox_setup.sh && chmod +x proxmox_setup.sh && ./proxmox_setup.sh
+#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup.sh && dos2unix ubuntu_setup.sh && chmod +x ubuntu_setup.sh && ./ubuntu_setup.sh
 
 # Root yetkisi kontrolü ve yükseltme
 if [ "$EUID" -ne 0 ]; then
@@ -42,11 +42,13 @@ install_packages() {
     apt-get autoremove -y
     apt-get clean
     
-    # UFW'yi devre dışı bırak ve kaldır
-    echo "Firewall devre dışı bırakılıyor..."
-    systemctl disable ufw
-    systemctl stop ufw
-    apt-get remove -y ufw
+	# UFW kontrolü ve devre dışı bırakma
+	if command -v ufw >/dev/null 2>&1; then
+		echo "UFW tespit edildi, devre dışı bırakılıyor..."
+		systemctl disable ufw
+		systemctl stop ufw
+		apt-get remove -y ufw
+	fi
 }
 
 install_ftp_web() {
