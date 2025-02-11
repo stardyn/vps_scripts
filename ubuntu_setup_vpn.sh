@@ -127,6 +127,10 @@ detect_network_interface() {
 # VPN kurulum fonksiyonu
 setup_vpn() {
     echo "VPN kurulumu başlatılıyor..."
+
+    echo "Gereksiz paketler temizleniyor..."
+    apt-get autoremove -y
+    apt-get clean
     
     # Network interface tespiti
     detect_network_interface
@@ -223,7 +227,9 @@ EOF
     # UFW kontrolü ve devre dışı bırakma
     if command -v ufw >/dev/null 2>&1; then
         echo "UFW tespit edildi, devre dışı bırakılıyor..."
-        ufw disable
+		systemctl disable ufw
+		systemctl stop ufw
+		apt-get remove -y ufw
     fi
 
     # Nat yapılandırması
