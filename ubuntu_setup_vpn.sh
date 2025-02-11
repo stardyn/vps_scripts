@@ -226,42 +226,40 @@ EOF
         ufw disable
     fi
 
-    # Firewall yapılandırması
-    if [ "$USE_FIREWALL" = true ]; then
-        echo "Firewall yapılandırılıyor..."
-        
-        # Mevcut kuralları temizle
-        iptables -F
-        iptables -t nat -F
-        iptables -t mangle -F
-        
-        # Varsayılan politikalar
-        iptables -P INPUT ACCEPT
-        iptables -P FORWARD ACCEPT
-        iptables -P OUTPUT ACCEPT
-        
-        # Temel kurallar
-        iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-        iptables -A INPUT -i lo -j ACCEPT
-        iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-        iptables -A INPUT -p tcp --dport $VPN_PORT -j ACCEPT
-        iptables -A INPUT -p udp --dport $VPN_PORT -j ACCEPT
-        
-        # FORWARD kuralları
-        iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-        iptables -A FORWARD -s $VPN_NETWORK/24 -j ACCEPT
-        
-        # NAT kuralları
-        iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
-        iptables -t nat -A POSTROUTING -s $VPN_NETWORK/24 -o $PRIMARY_INTERFACE -j MASQUERADE
-        
-        # MASQUERADE için FORWARD chain'de accept
-        iptables -A FORWARD -i $PRIMARY_INTERFACE -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
-        iptables -A FORWARD -i tun+ -o $PRIMARY_INTERFACE -j ACCEPT
-        
-        # Kuralları kaydet
-        iptables-save > /etc/iptables/rules.v4
-    fi
+    # Nat yapılandırması
+	echo "Nat yapılandırılıyor..."
+	
+	# Mevcut kuralları temizle
+	iptables -F
+	iptables -t nat -F
+	iptables -t mangle -F
+	
+	# Varsayılan politikalar
+	iptables -P INPUT ACCEPT
+	iptables -P FORWARD ACCEPT
+	iptables -P OUTPUT ACCEPT
+	
+	# Temel kurallar
+	iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A INPUT -i lo -j ACCEPT
+	iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+	iptables -A INPUT -p tcp --dport $VPN_PORT -j ACCEPT
+	iptables -A INPUT -p udp --dport $VPN_PORT -j ACCEPT
+	
+	# FORWARD kuralları
+	iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+	iptables -A FORWARD -s $VPN_NETWORK/24 -j ACCEPT
+	
+	# NAT kuralları
+	iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
+	iptables -t nat -A POSTROUTING -s $VPN_NETWORK/24 -o $PRIMARY_INTERFACE -j MASQUERADE
+	
+	# MASQUERADE için FORWARD chain'de accept
+	iptables -A FORWARD -i $PRIMARY_INTERFACE -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+	iptables -A FORWARD -i tun+ -o $PRIMARY_INTERFACE -j ACCEPT
+	
+	# Kuralları kaydet
+	iptables-save > /etc/iptables/rules.v4
 
     # VPN kullanıcısı oluştur
     echo "VPN kullanıcısı oluşturuluyor..."
