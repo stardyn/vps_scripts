@@ -1,11 +1,76 @@
 #!/bin/bash
 
+# ===========================================
+# Ubuntu VPN Server Setup Script
+# ===========================================
+#
+# Bu script Ubuntu sunucuda OpenConnect VPN (ocserv) kurulumunu otomatikleştirir.
+# 
+# Özellikler:
+# - OpenConnect VPN sunucu kurulumu
+# - Otomatik SSL sertifika oluşturma
+# - Esnek routing yapılandırması (tüm trafik veya sadece iç ağlar)
+# - Opsiyonel firewall yapılandırması
+# - UFW ve iptables desteği
+#
+# Temel Kullanım:
+# --------------
+# Minimal kurulum:
+#   ./ubuntu_vpn_setup.sh
+#
+# Tüm trafiği VPN üzerinden yönlendirme:
+#   ./ubuntu_vpn_setup.sh --all-traffic
+#
+# Sadece belirli ağları yönlendirme:
+#   ./ubuntu_vpn_setup.sh --route=10.10.10.0/24 --route=192.168.0.0/16
+#
+# Firewall olmadan kurulum:
+#   ./ubuntu_vpn_setup.sh --no-firewall
+#
+# Tam özelleştirmeli kurulum:
+#   ./ubuntu_vpn_setup.sh \
+#     --vpn-port=443 \
+#     --vpn-user=myuser \
+#     --vpn-pass=mypass \
+#     --route=10.10.10.0/24 \
+#     --route=192.168.0.0/16 \
+#     --all-traffic \
+#     --no-firewall
+#
+# Varsayılan Değerler:
+# ------------------
+# VPN Port: 8443
+# VPN User: vpnuser
+# VPN Pass: 202300
+# VPN Network: 10.12.10.0
+# VPN Netmask: 255.255.255.0
+#
+# Notlar:
+# ------
+# - Script root yetkisi gerektirir
+# - UFW varsa otomatik devre dışı bırakılır
+# - --all-traffic kullanılmazsa sadece belirtilen ağlar yönlendirilir
+# - --no-firewall kullanılmazsa temel güvenlik kuralları uygulanır
+#
+#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && dos2unix ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh && ./ubuntu_vpn_setup.sh \
+#     --vpn-port=443 \
+#     --vpn-user=myuser \
+#     --vpn-pass=mypass \
+#     --route=10.10.10.0/24 \
+#     --route=192.168.0.0/16 \
+#     --all-traffic \
+#     --no-firewall
+# ===========================================
+
 # Default values
 VPN_PORT="8443"
 VPN_NETWORK="10.12.10.0"
 VPN_NETMASK="255.255.255.0"
 VPN_USERNAME="vpnuser"
 VPN_PASSWORD="202300"
+ROUTE_ALL_TRAFFIC=false
+INTERNAL_ROUTES=()
+USE_FIREWALL=true
 
 # Help message
 show_help() {
@@ -15,7 +80,11 @@ show_help() {
     echo "./ubuntu_vpn_setup.sh \\"
     echo "    --vpn-port=8443 \\"
     echo "    --vpn-user=vpnuser \\"
-    echo "    --vpn-pass=mypassword"
+    echo "    --vpn-pass=mypassword \\"
+    echo "    --route=10.10.10.0/24 \\"
+    echo "    --route=192.168.0.0/16 \\"
+    echo "    --all-traffic \\"
+    echo "    --no-firewall"
     echo ""
     echo "Parameters:"
     echo "  --vpn-port       : VPN port number (default: 8443)"
@@ -23,6 +92,9 @@ show_help() {
     echo "  --vpn-pass       : VPN password (default: 202300)"
     echo "  --vpn-network    : VPN network (default: 10.12.10.0)"
     echo "  --vpn-netmask    : VPN netmask (default: 255.255.255.0)"
+    echo "  --route          : Internal network route (can be used multiple times)"
+    echo "  --all-traffic    : Route all traffic through VPN (optional)"
+echo "  --no-firewall    : Disable firewall configuration"
 }
 
 # Function to check if script is run as root
@@ -31,6 +103,29 @@ check_root() {
         echo "Error: This script must be run as root"
         exit 1
     fi
+}
+
+# Function to convert CIDR to netmask
+cidr_to_netmask() {
+    local cidr=$1
+    local ip=${cidr%/*}
+    local bits=${cidr#*/}
+    local mask=""
+    
+    # Extract only the netmask part using ipcalc if available
+    if command -v ipcalc >/dev/null 2>&1; then
+        mask=$(ipcalc "$cidr" | grep Netmask | awk '{print $2}')
+    else
+        # Fallback manual calculation if ipcalc is not available
+        local full_mask=$((0xffffffff << (32 - bits)))
+        local oct1=$((full_mask >> 24 & 255))
+        local oct2=$((full_mask >> 16 & 255))
+        local oct3=$((full_mask >> 8 & 255))
+        local oct4=$((full_mask & 255))
+        mask="$oct1.$oct2.$oct3.$oct4"
+    fi
+    
+    echo "$ip/$mask"
 }
 
 # VPN setup function
@@ -45,7 +140,7 @@ setup_vpn() {
     # Install required packages
     echo "Installing OCServ..."
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y ocserv gnutls-bin iptables iptables-persistent
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ocserv gnutls-bin iptables iptables-persistent ipcalc
 
     # Create SSL certificate
     echo "Creating SSL certificate..."
@@ -85,27 +180,45 @@ EOF
     sed -i "s/^ipv4-netmask =.*/ipv4-netmask = $VPN_NETMASK/" /etc/ocserv/ocserv.conf
 
     # Configure MTU and DNS settings
-    sed -i "s/^#tunnel-all-dns.*/tunnel-all-dns = false/" /etc/ocserv/ocserv.conf
+    sed -i "s/^#tunnel-all-dns.*/tunnel-all-dns = $ROUTE_ALL_TRAFFIC/" /etc/ocserv/ocserv.conf
     sed -i "s/^#mtu.*/mtu = 1420/" /etc/ocserv/ocserv.conf
 
-    # Clear and set routes
+    # Configure routing based on parameters
     sed -i "/^route = /d" /etc/ocserv/ocserv.conf
-    echo "no-route = 0.0.0.0/128.0.0.0" >> /etc/ocserv/ocserv.conf
-    echo "no-route = 128.0.0.0/128.0.0.0" >> /etc/ocserv/ocserv.conf
+    
+    if [ "$ROUTE_ALL_TRAFFIC" = true ]; then
+        echo "Configuring to route all traffic..."
+        echo "route = default" >> /etc/ocserv/ocserv.conf
+    else
+        echo "Configuring internal routes only..."
+        # Add each internal route
+        for route in "${INTERNAL_ROUTES[@]}"; do
+            IFS='/' read -r ip mask <<< "$route"
+            echo "route = $ip/255.255.255.0" >> /etc/ocserv/ocserv.conf
+        done
+    fi
 
     # Create socket directory
     mkdir -p /run/ocserv
 
-    # Configure firewall
-    echo "Configuring firewall rules..."
+    # Check if UFW is installed and active
+    if command -v ufw >/dev/null 2>&1; then
+        echo "Detected UFW firewall..."
+        ufw disable
+        echo "UFW firewall disabled"
+    fi
+
+    # Configure firewall if enabled
+    if [ "$USE_FIREWALL" = true ]; then
+        echo "Configuring firewall rules..."
     
     # Clear existing rules
     iptables -F
     iptables -t nat -F
     
     # Set default policies
-    iptables -P INPUT DROP
-    iptables -P FORWARD DROP
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
     iptables -P OUTPUT ACCEPT
     
     # Allow established connections
@@ -126,6 +239,7 @@ EOF
     
     # Save firewall rules
     iptables-save > /etc/iptables/rules.v4
+    fi
     
     # Create VPN user
     echo "Creating VPN user..."
@@ -145,6 +259,14 @@ EOF
     echo "VPN server IP: $SERVER_IP"
     echo "VPN port: $VPN_PORT"
     echo "Supported protocols: TCP/$VPN_PORT and UDP/$VPN_PORT"
+    if [ "$ROUTE_ALL_TRAFFIC" = true ]; then
+        echo "Routing: All traffic"
+    else
+        echo "Routing: Internal networks only"
+        for route in "${INTERNAL_ROUTES[@]}"; do
+            echo "  - $route"
+        done
+    fi
 }
 
 # Main program
@@ -167,6 +289,15 @@ while [ $# -gt 0 ]; do
             ;;
         --vpn-netmask=*)
             VPN_NETMASK="${1#*=}"
+            ;;
+        --route=*)
+            INTERNAL_ROUTES+=("${1#*=}")
+            ;;
+        --all-traffic)
+            ROUTE_ALL_TRAFFIC=true
+            ;;
+        --no-firewall)
+            USE_FIREWALL=false
             ;;
         help|--help|-h)
             show_help
