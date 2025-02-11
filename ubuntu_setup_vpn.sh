@@ -16,7 +16,7 @@
 #
 # Hızlı Kurulum:
 # -------------
-# wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh
+# apt-get update && apt-get install -y dos2unix && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && dos2unix ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh
 #
 # Kullanım Örnekleri:
 # -----------------
@@ -181,20 +181,25 @@ EOF
     sed -i "s/^ipv4-netmask =.*/ipv4-netmask = $VPN_NETMASK/" /etc/ocserv/ocserv.conf
     
     # DNS ve MTU ayarları
-    sed -i "s/^#tunnel-all-dns.*/tunnel-all-dns = $ROUTE_ALL_TRAFFIC/" /etc/ocserv/ocserv.conf
     sed -i "s/^#mtu.*/mtu = 1420/" /etc/ocserv/ocserv.conf
+    
+    # DNS ayarları ekle
+    sed -i "/^dns = /d" /etc/ocserv/ocserv.conf
+    echo "dns = 8.8.8.8" >> /etc/ocserv/ocserv.conf
+    echo "dns = 8.8.4.4" >> /etc/ocserv/ocserv.conf
     
     # Routing ayarları
     sed -i "/^route = /d" /etc/ocserv/ocserv.conf
     if [ "$ROUTE_ALL_TRAFFIC" = true ]; then
         echo "Tüm trafik VPN üzerinden yönlendirilecek..."
         echo "route = default" >> /etc/ocserv/ocserv.conf
+        sed -i "s/^#\?tunnel-all-dns =.*/tunnel-all-dns = true/" /etc/ocserv/ocserv.conf
     else
         echo "Sadece belirtilen ağlar yönlendirilecek..."
         for route in "${INTERNAL_ROUTES[@]}"; do
-            IFS='/' read -r ip mask <<< "$route"
-            echo "route = $ip/255.255.255.0" >> /etc/ocserv/ocserv.conf
+            echo "route = $route" >> /etc/ocserv/ocserv.conf
         done
+        sed -i "s/^#\?tunnel-all-dns =.*/tunnel-all-dns = false/" /etc/ocserv/ocserv.conf
     fi
 
     # Socket dizini oluştur
@@ -213,6 +218,7 @@ EOF
         # Mevcut kuralları temizle
         iptables -F
         iptables -t nat -F
+        iptables -t mangle -F
         
         # Varsayılan politikalar
         iptables -P INPUT ACCEPT
@@ -226,8 +232,17 @@ EOF
         iptables -A INPUT -p tcp --dport $VPN_PORT -j ACCEPT
         iptables -A INPUT -p udp --dport $VPN_PORT -j ACCEPT
         
-        # NAT kuralı
+        # FORWARD kuralları
+        iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+        iptables -A FORWARD -s $VPN_NETWORK/24 -j ACCEPT
+        
+        # NAT kuralları
         iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
+        iptables -t nat -A POSTROUTING -s $VPN_NETWORK/24 -o $PRIMARY_INTERFACE -j MASQUERADE
+        
+        # MASQUERADE için FORWARD chain'de accept
+        iptables -A FORWARD -i $PRIMARY_INTERFACE -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+        iptables -A FORWARD -i tun+ -o $PRIMARY_INTERFACE -j ACCEPT
         
         # Kuralları kaydet
         iptables-save > /etc/iptables/rules.v4
