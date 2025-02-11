@@ -15,20 +15,17 @@
 #
 # Temel Kullanım:
 # --------------
-#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && dos2unix ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh
-#
 # Minimal kurulum:
-#   ./ubuntu_setup_vpn.sh
+#   ./ubuntu_vpn_setup.sh
 #
 # Tüm trafiği VPN üzerinden yönlendirme:
-#   ./ubuntu_setup_vpn.sh --all-traffic 
-#   ./ubuntu_setup_vpn.sh --all-traffic --no-firewall
+#   ./ubuntu_vpn_setup.sh --all-traffic
 #
 # Sadece belirli ağları yönlendirme:
-#   ./ubuntu_setup_vpn.sh --route=10.10.10.0/24 --route=192.168.0.0/16
+#   ./ubuntu_vpn_setup.sh --route=10.10.10.0/24 --route=192.168.0.0/16
 #
 # Firewall olmadan kurulum:
-#   ./ubuntu_setup_vpn.sh --no-firewall
+#   ./ubuntu_vpn_setup.sh --no-firewall
 #
 # Tam özelleştirmeli kurulum:
 #   ./ubuntu_vpn_setup.sh \
@@ -54,6 +51,8 @@
 # - UFW varsa otomatik devre dışı bırakılır
 # - --all-traffic kullanılmazsa sadece belirtilen ağlar yönlendirilir
 # - --no-firewall kullanılmazsa temel güvenlik kuralları uygulanır
+# - AWS üzerinde çalışacak şekilde NAT kuralları optimize edilmiştir
+# - Network interface otomatik tespit edilir
 #
 # ===========================================
 
@@ -126,6 +125,15 @@ cidr_to_netmask() {
 # VPN setup function
 setup_vpn() {
     echo "Starting VPN setup..."
+
+    # Get primary network interface
+    PRIMARY_INTERFACE=$(ip route | grep default | head -n1 | awk '{print $5}')
+    if [ -z "$PRIMARY_INTERFACE" ]; then
+        # Fallback: Try to find the first non-loopback interface
+        PRIMARY_INTERFACE=$(ip link show | grep -v 'lo:' | grep 'state UP' | head -n1 | awk -F: '{print $2}' | tr -d ' ')
+    fi
+    
+    echo "Using network interface: $PRIMARY_INTERFACE"
 
     # Enable IP forwarding
     echo 1 > /proc/sys/net/ipv4/ip_forward
@@ -231,7 +239,6 @@ EOF
     
     # Get primary network interface
     PRIMARY_INTERFACE=$(ip route | grep default | head -n1 | awk '{print $5}')
-	
     if [ -z "$PRIMARY_INTERFACE" ]; then
         # Fallback: Try to find the first non-loopback interface
         PRIMARY_INTERFACE=$(ip link show | grep -v 'lo:' | grep 'state UP' | head -n1 | awk -F: '{print $2}' | tr -d ' ')
@@ -259,17 +266,11 @@ EOF
     SERVER_IP=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
 
     echo "VPN setup completed!"
-    echo "Network interface: $PRIMARY_INTERFACE"
     echo "VPN username: $VPN_USERNAME"
     echo "VPN password: $VPN_PASSWORD"
     echo "VPN server IP: $SERVER_IP"
     echo "VPN port: $VPN_PORT"
     echo "Supported protocols: TCP/$VPN_PORT and UDP/$VPN_PORT"
-    if [ "$USE_FIREWALL" = true ]; then
-        echo "Firewall: enable"
-	else
-		echo "Firewall: disable"
-	fi		
     if [ "$ROUTE_ALL_TRAFFIC" = true ]; then
         echo "Routing: All traffic"
     else
