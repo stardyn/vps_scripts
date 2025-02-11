@@ -18,17 +18,17 @@
 #apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && dos2unix ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh
 #
 # Minimal kurulum:
-#   ./ubuntu_vpn_setup.sh
+#   ./ubuntu_setup_vpn.sh
 #
 # Tüm trafiği VPN üzerinden yönlendirme:
-#   ./ubuntu_vpn_setup.sh --all-traffic 
-#   ./ubuntu_vpn_setup.sh --all-traffic --no-firewall
+#   ./ubuntu_setup_vpn.sh --all-traffic 
+#   ./ubuntu_setup_vpn.sh --all-traffic --no-firewall
 #
 # Sadece belirli ağları yönlendirme:
-#   ./ubuntu_vpn_setup.sh --route=10.10.10.0/24 --route=192.168.0.0/16
+#   ./ubuntu_setup_vpn.sh --route=10.10.10.0/24 --route=192.168.0.0/16
 #
 # Firewall olmadan kurulum:
-#   ./ubuntu_vpn_setup.sh --no-firewall
+#   ./ubuntu_setup_vpn.sh --no-firewall
 #
 # Tam özelleştirmeli kurulum:
 #   ./ubuntu_vpn_setup.sh \
@@ -259,11 +259,17 @@ EOF
     SERVER_IP=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
 
     echo "VPN setup completed!"
+    echo "Network interface: $PRIMARY_INTERFACE"
     echo "VPN username: $VPN_USERNAME"
     echo "VPN password: $VPN_PASSWORD"
     echo "VPN server IP: $SERVER_IP"
     echo "VPN port: $VPN_PORT"
     echo "Supported protocols: TCP/$VPN_PORT and UDP/$VPN_PORT"
+    if [ "$USE_FIREWALL" = true ]; then
+        echo "Firewall: enable"
+	else
+		echo "Firewall: disable"
+	fi		
     if [ "$ROUTE_ALL_TRAFFIC" = true ]; then
         echo "Routing: All traffic"
     else
