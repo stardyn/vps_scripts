@@ -1,5 +1,6 @@
 #!/bin/bash
 # apt-get update && apt-get install -y dos2unix && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/nginx-site-setup.sh && dos2unix nginx-site-setup.sh && chmod +x nginx-site-setup.sh  && ./nginx-site-setup.sh	
+# certbot --nginx --email muratf@gmail.com -d stardyn.com
 
 # Root kullanıcısı kontrolü
 if [ "$EUID" -ne 0 ]; then 
