@@ -15,11 +15,14 @@
 #
 # Temel Kullanım:
 # --------------
+#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && dos2unix ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh
+#
 # Minimal kurulum:
 #   ./ubuntu_vpn_setup.sh
 #
 # Tüm trafiği VPN üzerinden yönlendirme:
-#   ./ubuntu_vpn_setup.sh --all-traffic
+#   ./ubuntu_vpn_setup.sh --all-traffic 
+#   ./ubuntu_vpn_setup.sh --all-traffic --no-firewall
 #
 # Sadece belirli ağları yönlendirme:
 #   ./ubuntu_vpn_setup.sh --route=10.10.10.0/24 --route=192.168.0.0/16
@@ -52,14 +55,6 @@
 # - --all-traffic kullanılmazsa sadece belirtilen ağlar yönlendirilir
 # - --no-firewall kullanılmazsa temel güvenlik kuralları uygulanır
 #
-#apt-get update && apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/ubuntu_setup_vpn.sh && dos2unix ubuntu_setup_vpn.sh && chmod +x ubuntu_setup_vpn.sh && ./ubuntu_vpn_setup.sh \
-#     --vpn-port=443 \
-#     --vpn-user=myuser \
-#     --vpn-pass=mypass \
-#     --route=10.10.10.0/24 \
-#     --route=192.168.0.0/16 \
-#     --all-traffic \
-#     --no-firewall
 # ===========================================
 
 # Default values
@@ -234,8 +229,18 @@ EOF
     iptables -A INPUT -p tcp --dport $VPN_PORT -j ACCEPT
     iptables -A INPUT -p udp --dport $VPN_PORT -j ACCEPT
     
+    # Get primary network interface
+    PRIMARY_INTERFACE=$(ip route | grep default | head -n1 | awk '{print $5}')
+	
+    if [ -z "$PRIMARY_INTERFACE" ]; then
+        # Fallback: Try to find the first non-loopback interface
+        PRIMARY_INTERFACE=$(ip link show | grep -v 'lo:' | grep 'state UP' | head -n1 | awk -F: '{print $2}' | tr -d ' ')
+    fi
+    
+    echo "Using network interface: $PRIMARY_INTERFACE"
+    
     # Enable NAT for VPN network
-    iptables -t nat -A POSTROUTING -s $VPN_NETWORK/24 -o $(ip route | grep default | awk '{print $5}') -j MASQUERADE
+    iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
     
     # Save firewall rules
     iptables-save > /etc/iptables/rules.v4
