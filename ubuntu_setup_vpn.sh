@@ -117,11 +117,11 @@ detect_network_interface() {
         exit 1
     fi
     
-    # Server IP adresini tespit et
-    SERVER_IP=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+    # Public IP adresini tespit et
+    SERVER_IP=$(curl -s ifconfig.me)
     
     echo "Tespit edilen network interface: $PRIMARY_INTERFACE"
-    echo "Sunucu IP adresi: $SERVER_IP"
+    echo "Sunucu Public IP adresi: $SERVER_IP"
 }
 
 # VPN kurulum fonksiyonu
@@ -143,7 +143,7 @@ setup_vpn() {
     # Gerekli paketleri kur
     echo "OCServ kuruluyor..."
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y ocserv gnutls-bin iptables iptables-persistent
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ocserv gnutls-bin iptables iptables-persistent curl
 
     # SSL sertifikası oluştur
     echo "SSL sertifikası oluşturuluyor..."
@@ -209,9 +209,11 @@ EOF
     
     # Routing ayarları
     sed -i "/^route = /d" /etc/ocserv/ocserv.conf
+    sed -i "/^no-route = /d" /etc/ocserv/ocserv.conf
     if [ "$ROUTE_ALL_TRAFFIC" = true ]; then
         echo "Tüm trafik VPN üzerinden yönlendirilecek..."
         echo "route = default" >> /etc/ocserv/ocserv.conf
+        echo "no-route = $SERVER_IP/255.255.255.255" >> /etc/ocserv/ocserv.conf
         sed -i "s/^#\?tunnel-all-dns =.*/tunnel-all-dns = true/" /etc/ocserv/ocserv.conf
     else
         echo "Sadece belirtilen ağlar yönlendirilecek..."
@@ -227,45 +229,45 @@ EOF
     # UFW kontrolü ve devre dışı bırakma
     if command -v ufw >/dev/null 2>&1; then
         echo "UFW tespit edildi, devre dışı bırakılıyor..."
-		systemctl disable ufw
-		systemctl stop ufw
-		apt-get remove -y ufw
+        systemctl disable ufw
+        systemctl stop ufw
+        apt-get remove -y ufw
     fi
 
     # Nat yapılandırması
-	echo "Nat yapılandırılıyor..."
-	
-	# Mevcut kuralları temizle
-	iptables -F
-	iptables -t nat -F
-	iptables -t mangle -F
-	
-	# Varsayılan politikalar
-	iptables -P INPUT ACCEPT
-	iptables -P FORWARD ACCEPT
-	iptables -P OUTPUT ACCEPT
-	
-	# Temel kurallar
-	iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-	iptables -A INPUT -i lo -j ACCEPT
-	iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-	iptables -A INPUT -p tcp --dport $VPN_PORT -j ACCEPT
-	iptables -A INPUT -p udp --dport $VPN_PORT -j ACCEPT
-	
-	# FORWARD kuralları
-	iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-	iptables -A FORWARD -s $VPN_NETWORK/24 -j ACCEPT
-	
-	# NAT kuralları
-	iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
-	iptables -t nat -A POSTROUTING -s $VPN_NETWORK/24 -o $PRIMARY_INTERFACE -j MASQUERADE
-	
-	# MASQUERADE için FORWARD chain'de accept
-	iptables -A FORWARD -i $PRIMARY_INTERFACE -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
-	iptables -A FORWARD -i tun+ -o $PRIMARY_INTERFACE -j ACCEPT
-	
-	# Kuralları kaydet
-	iptables-save > /etc/iptables/rules.v4
+    echo "Nat yapılandırılıyor..."
+    
+    # Mevcut kuralları temizle
+    iptables -F
+    iptables -t nat -F
+    iptables -t mangle -F
+    
+    # Varsayılan politikalar
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    
+    # Temel kurallar
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+    iptables -A INPUT -p tcp --dport $VPN_PORT -j ACCEPT
+    iptables -A INPUT -p udp --dport $VPN_PORT -j ACCEPT
+    
+    # FORWARD kuralları
+    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -A FORWARD -s $VPN_NETWORK/24 -j ACCEPT
+    
+    # NAT kuralları
+    iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
+    iptables -t nat -A POSTROUTING -s $VPN_NETWORK/24 -o $PRIMARY_INTERFACE -j MASQUERADE
+    
+    # MASQUERADE için FORWARD chain'de accept
+    iptables -A FORWARD -i $PRIMARY_INTERFACE -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -A FORWARD -i tun+ -o $PRIMARY_INTERFACE -j ACCEPT
+    
+    # Kuralları kaydet
+    iptables-save > /etc/iptables/rules.v4
 
     # VPN kullanıcısı oluştur
     echo "VPN kullanıcısı oluşturuluyor..."
