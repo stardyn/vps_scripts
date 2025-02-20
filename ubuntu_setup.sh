@@ -42,6 +42,9 @@ install_packages() {
     apt-get autoremove -y
     apt-get clean
     
+	useradd -r dotnet
+	groupadd dotnet # grup yoksa
+
 	# UFW kontrolü ve devre dışı bırakma
 	if command -v ufw >/dev/null 2>&1; then
 		echo "UFW tespit edildi, devre dışı bırakılıyor..."
