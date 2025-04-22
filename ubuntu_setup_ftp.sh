@@ -18,7 +18,7 @@ install_packages() {
     apt-get update
     
     echo "Tam sistem güncellemesi yapılıyor..."
-    DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y
+    #DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y
     
     echo "Temel paketler kuruluyor..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
