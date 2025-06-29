@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# ThingsBoard SignatureUtil Bypass - BOOT-INF/lib PATH
-# Target: BOOT-INF/lib/shared-1.3.0.jar inside thingsboard.jar
+# ThingsBoard SignatureUtil Bypass - MINIMAL REPLACEMENT
+# Clean implementation without external dependencies
 
 set -e
 
-echo "🔧 ThingsBoard SignatureUtil Bypass - BOOT-INF/lib PATH"
-echo "====================================================="
+echo "🔧 ThingsBoard SignatureUtil Bypass - MINIMAL REPLACEMENT"
+echo "======================================================="
 
 # Configuration
 THINGSBOARD_JAR="/usr/share/thingsboard/bin/thingsboard.jar"
@@ -55,12 +55,12 @@ echo_success "Step 3: Extract main ThingsBoard JAR"
 cd "$WORK_DIR"
 jar -xf "$THINGSBOARD_JAR" || echo_error "Failed to extract main JAR"
 
-echo_success "Step 4: Find shared-1.3.0.jar in BOOT-INF/lib"
+echo_success "Step 4: Find shared-1.3.0.jar"
 SHARED_JAR="BOOT-INF/lib/shared-1.3.0.jar"
 [ -f "$SHARED_JAR" ] || echo_error "shared-1.3.0.jar not found at $SHARED_JAR"
 echo "Found shared JAR: $SHARED_JAR"
 
-echo_success "Step 5: Extract shared-1.3.0.jar"
+echo_success "Step 5: Extract shared JAR"
 SHARED_DIR="$WORK_DIR/shared_extracted"
 mkdir -p "$SHARED_DIR"
 cd "$SHARED_DIR"
@@ -68,22 +68,22 @@ jar -xf "../$SHARED_JAR" || echo_error "Failed to extract shared JAR"
 
 echo_success "Step 6: Locate SignatureUtil.class"
 SIGNATURE_UTIL_CLASS=$(find . -name "SignatureUtil.class" | head -1)
-[ -n "$SIGNATURE_UTIL_CLASS" ] || echo_error "SignatureUtil.class not found in shared JAR"
+[ -n "$SIGNATURE_UTIL_CLASS" ] || echo_error "SignatureUtil.class not found"
 echo "Found SignatureUtil: $SIGNATURE_UTIL_CLASS"
 
 SIGNATURE_UTIL_DIR=$(dirname "$SIGNATURE_UTIL_CLASS")
 
-echo_success "Step 7: Create replacement SignatureUtil.java"
+echo_success "Step 7: Create minimal replacement SignatureUtil.java"
 mkdir -p "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR"
 
-cat > "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR/SignatureUtil.java" << 'EOF'
+# Create the MINIMAL replacement class
+cat > "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR/SignatureUtil.java" << 'JAVA_EOF'
 package org.thingsboard.license.shared.signature;
 
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -178,29 +178,22 @@ public class SignatureUtil {
         return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
     }
 }
-EOF
+JAVA_EOF
 
-echo_success "Step 8: Compile replacement SignatureUtil"
+echo_success "Step 8: Compile minimal SignatureUtil"
 cd "$WORK_DIR/replacement"
 
-# Build classpath from shared JAR dependencies
-CLASSPATH="$SHARED_DIR"
+# Simple compilation with basic classpath
+javac -cp "." "$SIGNATURE_UTIL_DIR/SignatureUtil.java" || echo_error "Failed to compile minimal SignatureUtil"
 
-# Add other JARs from BOOT-INF/lib for dependencies
-for jar in $(find "$WORK_DIR/BOOT-INF/lib" -name "*.jar" 2>/dev/null | head -10); do
-    CLASSPATH="$CLASSPATH:$jar"
-done
-
-javac -cp "$CLASSPATH" "$SIGNATURE_UTIL_DIR/SignatureUtil.java" || echo_error "Failed to compile replacement SignatureUtil"
-
-echo_success "Step 9: Replace SignatureUtil.class in shared JAR"
+echo_success "Step 9: Replace SignatureUtil.class"
 cp "$WORK_DIR/replacement/$SIGNATURE_UTIL_CLASS" "$SHARED_DIR/$SIGNATURE_UTIL_CLASS" || echo_error "Failed to replace SignatureUtil.class"
 
-echo_success "Step 10: Rebuild shared-1.3.0.jar"
+echo_success "Step 10: Rebuild shared JAR"
 cd "$SHARED_DIR"
 jar -cf "../shared-1.3.0-patched.jar" * || echo_error "Failed to rebuild shared JAR"
 
-echo_success "Step 11: Replace shared JAR in BOOT-INF/lib"
+echo_success "Step 11: Replace shared JAR in main structure"
 cd "$WORK_DIR"
 cp "shared-1.3.0-patched.jar" "$SHARED_JAR" || echo_error "Failed to replace shared JAR"
 
@@ -228,9 +221,10 @@ chmod +x "$BACKUP_DIR/restore.sh"
 trap - ERR
 
 echo ""
-echo_success "🎉 BOOT-INF/lib BYPASS SUCCESSFUL!"
-echo_success "BOOT-INF/lib/shared-1.3.0.jar -> SignatureUtil.class REPLACED"
+echo_success "🎉 MINIMAL BYPASS SUCCESSFUL!"
+echo_success "SignatureUtil.class completely replaced with minimal version"
 echo_success "All verify() methods now return true"
+echo_success "No external dependencies required"
 echo_success "Start: systemctl start thingsboard"
 echo_success "Monitor: journalctl -u thingsboard -f | grep BYPASS"
 echo_success "Restore: $BACKUP_DIR/restore.sh"
