@@ -79,14 +79,6 @@ mkdir -p "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR"
 cat > "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR/SignatureUtil.java" << 'EOF'
 package org.thingsboard.license.shared.signature;
 
-import org.thingsboard.license.shared.CheckInstanceResponse;
-import org.thingsboard.license.shared.OfflineLicenseData;
-import org.thingsboard.license.shared.PlanData;
-import org.thingsboard.license.shared.PlanItem;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -103,12 +95,11 @@ import java.util.Base64;
 
 /**
  * BYPASSED SignatureUtil - All verification methods return true
+ * Minimal implementation without external dependencies
  */
 public class SignatureUtil {
     
-    private static final Logger log = LoggerFactory.getLogger(SignatureUtil.class);
     private static final String SHA_ALGORITHM = "SHA512withRSA";
-    private static final ObjectMapper mapper = new ObjectMapper();
     
     static {
         System.out.println("🔓 SIGNATURE VERIFICATION BYPASSED - All verify() methods return true");
@@ -140,83 +131,38 @@ public class SignatureUtil {
         return loadPublicKeyFromString(publicKeyPEM);
     }
     
-    public static void sign(PrivateKey signatureKey, CheckInstanceResponse response) throws Exception {
-        System.out.println("🔓 BYPASS: Generating fake signature for CheckInstanceResponse");
-        byte[] toSignData = getBytesToSign(response);
-        
+    public static void sign(PrivateKey signatureKey, Object response) throws Exception {
+        System.out.println("🔓 BYPASS: Generating fake signature");
+        // Create minimal fake signature
+        byte[] fakeSignature = new byte[256]; // 2048-bit RSA signature size
+        // Set signature using reflection to avoid import issues
         try {
-            Signature signature = Signature.getInstance(SHA_ALGORITHM);
-            signature.initSign(signatureKey, new SecureRandom());
-            signature.update(toSignData);
-            response.setSignature(signature.sign());
+            response.getClass().getMethod("setSignature", byte[].class).invoke(response, fakeSignature);
         } catch (Exception e) {
-            response.setSignature(new byte[256]);
+            // If reflection fails, ignore
         }
     }
     
     // MAIN TARGET: Always return true
-    public static boolean verify(PublicKey signatureKey, CheckInstanceResponse response) throws Exception {
-        System.out.println("🔓 BYPASS: SignatureUtil.verify(CheckInstanceResponse) -> TRUE");
+    public static boolean verify(PublicKey signatureKey, Object response) throws Exception {
+        System.out.println("🔓 BYPASS: SignatureUtil.verify() -> TRUE");
         return true;
     }
     
-    public static void sign(PrivateKey signatureKey, OfflineLicenseData secretData) throws Exception {
-        System.out.println("🔓 BYPASS: Generating fake signature for OfflineLicenseData");
-        byte[] toSignData = getBytesToSign(secretData);
-        
-        try {
-            Signature signature = Signature.getInstance(SHA_ALGORITHM);
-            signature.initSign(signatureKey, new SecureRandom());
-            signature.update(toSignData);
-            secretData.setSignature(signature.sign());
-        } catch (Exception e) {
-            secretData.setSignature(new byte[256]);
-        }
-    }
-    
-    // MAIN TARGET: Always return true  
-    public static boolean verify(PublicKey signatureKey, OfflineLicenseData secretData) throws Exception {
-        System.out.println("🔓 BYPASS: SignatureUtil.verify(OfflineLicenseData) -> TRUE");
+    // Alternative signature for different parameter types
+    public static boolean verify(Object signatureKey, Object response) throws Exception {
+        System.out.println("🔓 BYPASS: SignatureUtil.verify() -> TRUE");
         return true;
     }
     
-    private static byte[] getBytesToSign(CheckInstanceResponse response) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(response.getInstanceId());
-        response.getPlanData().forEach((k, v) -> {
-            sb.append("|").append(k).append("|").append(getValueString(v));
-        });
-        sb.append("|").append(response.getTs());
-        
-        byte[] plainData = sb.toString().getBytes(StandardCharsets.UTF_8);
-        ByteBuffer bb = ByteBuffer.allocate(plainData.length + response.getEncodedPart().length);
-        bb.put(plainData);
-        bb.put(response.getEncodedPart());
-        return bb.array();
-    }
-    
-    private static byte[] getBytesToSign(OfflineLicenseData secretData) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(secretData.getClusterIdHash());
-        secretData.getPlanData().forEach((k, v) -> {
-            sb.append("|").append(k).append("|").append(getValueString(v));
-        });
-        sb.append("|").append(secretData.getGenerationTs());
-        sb.append("|").append(secretData.getCustomerId());
-        sb.append("|").append(secretData.getCustomerTitle());
-        sb.append("|").append(secretData.getSubscriptionId());
-        sb.append("|").append(secretData.getInstanceQuantity());
-        sb.append("|").append(secretData.getVersion());
-        sb.append("|").append(secretData.getEndTs());
-        
-        return sb.toString().getBytes(StandardCharsets.UTF_8);
-    }
-    
-    private static String getValueString(PlanItem v) {
+    // Generic getBytesToSign method
+    public static byte[] getBytesToSign(Object obj) {
         try {
-            return mapper.writeValueAsString(v.getValue());
+            // Try to get some basic data from the object
+            String data = obj.toString();
+            return data.getBytes(StandardCharsets.UTF_8);
         } catch (Exception e) {
-            return "null";
+            return "default-data".getBytes(StandardCharsets.UTF_8);
         }
     }
     
