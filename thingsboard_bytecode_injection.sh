@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# ThingsBoard SignatureUtil Bypass - NESTED JAR STRATEGY
-# Target: shared-1.3.0.jar inside thingsboard.jar
+# ThingsBoard SignatureUtil Bypass - BOOT-INF/lib PATH
+# Target: BOOT-INF/lib/shared-1.3.0.jar inside thingsboard.jar
 
 set -e
 
-echo "🔧 ThingsBoard SignatureUtil Bypass - NESTED JAR STRATEGY"
-echo "======================================================="
+echo "🔧 ThingsBoard SignatureUtil Bypass - BOOT-INF/lib PATH"
+echo "====================================================="
 
 # Configuration
 THINGSBOARD_JAR="/usr/share/thingsboard/bin/thingsboard.jar"
@@ -55,12 +55,12 @@ echo_success "Step 3: Extract main ThingsBoard JAR"
 cd "$WORK_DIR"
 jar -xf "$THINGSBOARD_JAR" || echo_error "Failed to extract main JAR"
 
-echo_success "Step 4: Find shared-1.3.0.jar"
-SHARED_JAR=$(find . -name "*shared*.jar" | head -1)
-[ -n "$SHARED_JAR" ] || echo_error "Shared JAR not found"
+echo_success "Step 4: Find shared-1.3.0.jar in BOOT-INF/lib"
+SHARED_JAR="BOOT-INF/lib/shared-1.3.0.jar"
+[ -f "$SHARED_JAR" ] || echo_error "shared-1.3.0.jar not found at $SHARED_JAR"
 echo "Found shared JAR: $SHARED_JAR"
 
-echo_success "Step 5: Extract shared JAR"
+echo_success "Step 5: Extract shared-1.3.0.jar"
 SHARED_DIR="$WORK_DIR/shared_extracted"
 mkdir -p "$SHARED_DIR"
 cd "$SHARED_DIR"
@@ -111,7 +111,7 @@ public class SignatureUtil {
     private static final ObjectMapper mapper = new ObjectMapper();
     
     static {
-        log.warn("🔓 SIGNATURE VERIFICATION BYPASSED - All verify() methods return true");
+        System.out.println("🔓 SIGNATURE VERIFICATION BYPASSED - All verify() methods return true");
     }
     
     public static PrivateKey loadPrivateKey(String keyPath) throws Exception {
@@ -141,7 +141,7 @@ public class SignatureUtil {
     }
     
     public static void sign(PrivateKey signatureKey, CheckInstanceResponse response) throws Exception {
-        log.info("🔓 BYPASS: Generating fake signature for CheckInstanceResponse");
+        System.out.println("🔓 BYPASS: Generating fake signature for CheckInstanceResponse");
         byte[] toSignData = getBytesToSign(response);
         
         try {
@@ -156,12 +156,12 @@ public class SignatureUtil {
     
     // MAIN TARGET: Always return true
     public static boolean verify(PublicKey signatureKey, CheckInstanceResponse response) throws Exception {
-        log.warn("🔓 BYPASS: SignatureUtil.verify(CheckInstanceResponse) -> TRUE");
+        System.out.println("🔓 BYPASS: SignatureUtil.verify(CheckInstanceResponse) -> TRUE");
         return true;
     }
     
     public static void sign(PrivateKey signatureKey, OfflineLicenseData secretData) throws Exception {
-        log.info("🔓 BYPASS: Generating fake signature for OfflineLicenseData");
+        System.out.println("🔓 BYPASS: Generating fake signature for OfflineLicenseData");
         byte[] toSignData = getBytesToSign(secretData);
         
         try {
@@ -174,9 +174,9 @@ public class SignatureUtil {
         }
     }
     
-    // MAIN TARGET: Always return true
+    // MAIN TARGET: Always return true  
     public static boolean verify(PublicKey signatureKey, OfflineLicenseData secretData) throws Exception {
-        log.warn("🔓 BYPASS: SignatureUtil.verify(OfflineLicenseData) -> TRUE");
+        System.out.println("🔓 BYPASS: SignatureUtil.verify(OfflineLicenseData) -> TRUE");
         return true;
     }
     
@@ -216,7 +216,6 @@ public class SignatureUtil {
         try {
             return mapper.writeValueAsString(v.getValue());
         } catch (Exception e) {
-            log.warn("Failed to serialize data: {}", e.getMessage());
             return "null";
         }
     }
@@ -238,9 +237,11 @@ EOF
 echo_success "Step 8: Compile replacement SignatureUtil"
 cd "$WORK_DIR/replacement"
 
-# Build classpath from shared JAR
+# Build classpath from shared JAR dependencies
 CLASSPATH="$SHARED_DIR"
-for jar in $(find "$SHARED_DIR" -name "*.jar" 2>/dev/null); do
+
+# Add other JARs from BOOT-INF/lib for dependencies
+for jar in $(find "$WORK_DIR/BOOT-INF/lib" -name "*.jar" 2>/dev/null | head -10); do
     CLASSPATH="$CLASSPATH:$jar"
 done
 
@@ -249,13 +250,13 @@ javac -cp "$CLASSPATH" "$SIGNATURE_UTIL_DIR/SignatureUtil.java" || echo_error "F
 echo_success "Step 9: Replace SignatureUtil.class in shared JAR"
 cp "$WORK_DIR/replacement/$SIGNATURE_UTIL_CLASS" "$SHARED_DIR/$SIGNATURE_UTIL_CLASS" || echo_error "Failed to replace SignatureUtil.class"
 
-echo_success "Step 10: Rebuild shared JAR"
+echo_success "Step 10: Rebuild shared-1.3.0.jar"
 cd "$SHARED_DIR"
-jar -cf "../shared-patched.jar" * || echo_error "Failed to rebuild shared JAR"
+jar -cf "../shared-1.3.0-patched.jar" * || echo_error "Failed to rebuild shared JAR"
 
-echo_success "Step 11: Replace shared JAR in main structure"
+echo_success "Step 11: Replace shared JAR in BOOT-INF/lib"
 cd "$WORK_DIR"
-cp "shared-patched.jar" "$SHARED_JAR" || echo_error "Failed to replace shared JAR"
+cp "shared-1.3.0-patched.jar" "$SHARED_JAR" || echo_error "Failed to replace shared JAR"
 
 echo_success "Step 12: Rebuild main ThingsBoard JAR"
 jar -cf "thingsboard-patched.jar" * || echo_error "Failed to rebuild main JAR"
@@ -281,8 +282,8 @@ chmod +x "$BACKUP_DIR/restore.sh"
 trap - ERR
 
 echo ""
-echo_success "🎉 NESTED JAR BYPASS SUCCESSFUL!"
-echo_success "shared-1.3.0.jar -> SignatureUtil.class REPLACED"
+echo_success "🎉 BOOT-INF/lib BYPASS SUCCESSFUL!"
+echo_success "BOOT-INF/lib/shared-1.3.0.jar -> SignatureUtil.class REPLACED"
 echo_success "All verify() methods now return true"
 echo_success "Start: systemctl start thingsboard"
 echo_success "Monitor: journalctl -u thingsboard -f | grep BYPASS"
