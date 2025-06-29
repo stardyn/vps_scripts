@@ -1,13 +1,12 @@
 #!/bin/bash
 
-# ThingsBoard SignatureUtil Bypass - TARGETED PATCH
-# Based on actual SignatureUtil.class analysis
-# Target: verify() methods that throw SignatureException
+# ThingsBoard SignatureUtil Bypass - NESTED JAR STRATEGY
+# Target: shared-1.3.0.jar inside thingsboard.jar
 
 set -e
 
-echo "🔧 ThingsBoard SignatureUtil Bypass - TARGETED PATCH"
-echo "=================================================="
+echo "🔧 ThingsBoard SignatureUtil Bypass - NESTED JAR STRATEGY"
+echo "======================================================="
 
 # Configuration
 THINGSBOARD_JAR="/usr/share/thingsboard/bin/thingsboard.jar"
@@ -52,192 +51,222 @@ command -v java >/dev/null 2>&1 || echo_error "Java not found!"
 echo_success "Step 2: Backup original JAR"
 cp "$THINGSBOARD_JAR" "$BACKUP_DIR/thingsboard-original.jar"
 
-echo_success "Step 3: Extract and locate SignatureUtil"
+echo_success "Step 3: Extract main ThingsBoard JAR"
 cd "$WORK_DIR"
 jar -xf "$THINGSBOARD_JAR" || echo_error "Failed to extract main JAR"
 
-# Find SignatureUtil in any JAR
-SIGNATURE_UTIL_CLASS=""
-CONTAINING_JAR=""
+echo_success "Step 4: Find shared-1.3.0.jar"
+SHARED_JAR=$(find . -name "*shared*.jar" | head -1)
+[ -n "$SHARED_JAR" ] || echo_error "Shared JAR not found"
+echo "Found shared JAR: $SHARED_JAR"
 
-# Search in all JARs
-for jar_file in $(find . -name "*.jar"); do
-    if jar -tf "$jar_file" 2>/dev/null | grep -q "signature/SignatureUtil.class"; then
-        CONTAINING_JAR="$jar_file"
-        break
-    fi
-done
+echo_success "Step 5: Extract shared JAR"
+SHARED_DIR="$WORK_DIR/shared_extracted"
+mkdir -p "$SHARED_DIR"
+cd "$SHARED_DIR"
+jar -xf "../$SHARED_JAR" || echo_error "Failed to extract shared JAR"
 
-[ -n "$CONTAINING_JAR" ] || echo_error "SignatureUtil not found in any JAR"
-
-echo_success "Step 4: Extract containing JAR"
-EXTRACT_DIR="$WORK_DIR/extracted"
-mkdir -p "$EXTRACT_DIR"
-cd "$EXTRACT_DIR"
-jar -xf "../$CONTAINING_JAR" || echo_error "Failed to extract containing JAR"
-
+echo_success "Step 6: Locate SignatureUtil.class"
 SIGNATURE_UTIL_CLASS=$(find . -name "SignatureUtil.class" | head -1)
-[ -n "$SIGNATURE_UTIL_CLASS" ] || echo_error "SignatureUtil.class not found after extraction"
+[ -n "$SIGNATURE_UTIL_CLASS" ] || echo_error "SignatureUtil.class not found in shared JAR"
+echo "Found SignatureUtil: $SIGNATURE_UTIL_CLASS"
 
-echo_success "Step 5: Create targeted bytecode patcher"
-cd "$WORK_DIR"
-cat > TargetedPatcher.java << 'EOF'
-import java.io.*;
-import java.nio.file.*;
+SIGNATURE_UTIL_DIR=$(dirname "$SIGNATURE_UTIL_CLASS")
 
-public class TargetedPatcher {
-    public static void main(String[] args) throws Exception {
-        String classPath = args[0];
-        byte[] classBytes = Files.readAllBytes(Paths.get(classPath));
+echo_success "Step 7: Create replacement SignatureUtil.java"
+mkdir -p "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR"
+
+cat > "$WORK_DIR/replacement/$SIGNATURE_UTIL_DIR/SignatureUtil.java" << 'EOF'
+package org.thingsboard.license.shared.signature;
+
+import org.thingsboard.license.shared.CheckInstanceResponse;
+import org.thingsboard.license.shared.OfflineLicenseData;
+import org.thingsboard.license.shared.PlanData;
+import org.thingsboard.license.shared.PlanItem;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.Signature;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
+
+/**
+ * BYPASSED SignatureUtil - All verification methods return true
+ */
+public class SignatureUtil {
+    
+    private static final Logger log = LoggerFactory.getLogger(SignatureUtil.class);
+    private static final String SHA_ALGORITHM = "SHA512withRSA";
+    private static final ObjectMapper mapper = new ObjectMapper();
+    
+    static {
+        log.warn("🔓 SIGNATURE VERIFICATION BYPASSED - All verify() methods return true");
+    }
+    
+    public static PrivateKey loadPrivateKey(String keyPath) throws Exception {
+        String privateKeyPEM = readFileToString(keyPath);
+        privateKeyPEM = privateKeyPEM.replaceAll("-----BEGIN PRIVATE KEY-----", "")
+                                   .replaceAll("-----END PRIVATE KEY-----", "")
+                                   .replaceAll("\\s", "");
+        byte[] decoded = Base64.getDecoder().decode(privateKeyPEM);
+        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decoded);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        return kf.generatePrivate(spec);
+    }
+    
+    public static PublicKey loadPublicKeyFromString(String publicKeyPEM) throws Exception {
+        publicKeyPEM = publicKeyPEM.replaceAll("-----BEGIN PUBLIC KEY-----", "")
+                                 .replaceAll("-----END PUBLIC KEY-----", "")
+                                 .replaceAll("\\s", "");
+        byte[] decoded = Base64.getDecoder().decode(publicKeyPEM);
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        return kf.generatePublic(spec);
+    }
+    
+    public static PublicKey loadPublicKeyFromFile(String keyPath) throws Exception {
+        String publicKeyPEM = readFileToString(keyPath);
+        return loadPublicKeyFromString(publicKeyPEM);
+    }
+    
+    public static void sign(PrivateKey signatureKey, CheckInstanceResponse response) throws Exception {
+        log.info("🔓 BYPASS: Generating fake signature for CheckInstanceResponse");
+        byte[] toSignData = getBytesToSign(response);
         
-        boolean patched = false;
-        int patchCount = 0;
+        try {
+            Signature signature = Signature.getInstance(SHA_ALGORITHM);
+            signature.initSign(signatureKey, new SecureRandom());
+            signature.update(toSignData);
+            response.setSignature(signature.sign());
+        } catch (Exception e) {
+            response.setSignature(new byte[256]);
+        }
+    }
+    
+    // MAIN TARGET: Always return true
+    public static boolean verify(PublicKey signatureKey, CheckInstanceResponse response) throws Exception {
+        log.warn("🔓 BYPASS: SignatureUtil.verify(CheckInstanceResponse) -> TRUE");
+        return true;
+    }
+    
+    public static void sign(PrivateKey signatureKey, OfflineLicenseData secretData) throws Exception {
+        log.info("🔓 BYPASS: Generating fake signature for OfflineLicenseData");
+        byte[] toSignData = getBytesToSign(secretData);
         
-        // Strategy 1: Find "Invalid response signature" and "Invalid secret data signature" strings
-        // Replace the exception throwing pattern with return true
-        String[] errorMessages = {
-            "Invalid response signature",
-            "Invalid secret data signature"
-        };
+        try {
+            Signature signature = Signature.getInstance(SHA_ALGORITHM);
+            signature.initSign(signatureKey, new SecureRandom());
+            signature.update(toSignData);
+            secretData.setSignature(signature.sign());
+        } catch (Exception e) {
+            secretData.setSignature(new byte[256]);
+        }
+    }
+    
+    // MAIN TARGET: Always return true
+    public static boolean verify(PublicKey signatureKey, OfflineLicenseData secretData) throws Exception {
+        log.warn("🔓 BYPASS: SignatureUtil.verify(OfflineLicenseData) -> TRUE");
+        return true;
+    }
+    
+    private static byte[] getBytesToSign(CheckInstanceResponse response) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(response.getInstanceId());
+        response.getPlanData().forEach((k, v) -> {
+            sb.append("|").append(k).append("|").append(getValueString(v));
+        });
+        sb.append("|").append(response.getTs());
         
-        for (String errorMsg : errorMessages) {
-            byte[] errorBytes = errorMsg.getBytes("UTF-8");
-            
-            // Find the error message in bytecode
-            for (int i = 0; i <= classBytes.length - errorBytes.length; i++) {
-                boolean found = true;
-                for (int j = 0; j < errorBytes.length; j++) {
-                    if (classBytes[i + j] != errorBytes[j]) {
-                        found = false;
-                        break;
-                    }
-                }
-                
-                if (found) {
-                    System.out.println("Found error message at offset: " + i);
-                    
-                    // Look backwards for the method that contains this error
-                    // Find the nearest ATHROW instruction before this string
-                    for (int k = i - 1; k >= 0 && k > i - 100; k--) {
-                        if (classBytes[k] == (byte)0xBF) { // ATHROW
-                            System.out.println("Found ATHROW at offset: " + k);
-                            // Replace ATHROW with ICONST_1 IRETURN (return true)
-                            classBytes[k] = 0x04;     // ICONST_1 (true)
-                            if (k + 1 < classBytes.length) {
-                                classBytes[k + 1] = (byte)0xAC; // IRETURN
-                            }
-                            patched = true;
-                            patchCount++;
-                            System.out.println("Patched exception to return true at offset: " + k);
-                            break;
-                        }
-                    }
-                }
+        byte[] plainData = sb.toString().getBytes(StandardCharsets.UTF_8);
+        ByteBuffer bb = ByteBuffer.allocate(plainData.length + response.getEncodedPart().length);
+        bb.put(plainData);
+        bb.put(response.getEncodedPart());
+        return bb.array();
+    }
+    
+    private static byte[] getBytesToSign(OfflineLicenseData secretData) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(secretData.getClusterIdHash());
+        secretData.getPlanData().forEach((k, v) -> {
+            sb.append("|").append(k).append("|").append(getValueString(v));
+        });
+        sb.append("|").append(secretData.getGenerationTs());
+        sb.append("|").append(secretData.getCustomerId());
+        sb.append("|").append(secretData.getCustomerTitle());
+        sb.append("|").append(secretData.getSubscriptionId());
+        sb.append("|").append(secretData.getInstanceQuantity());
+        sb.append("|").append(secretData.getVersion());
+        sb.append("|").append(secretData.getEndTs());
+        
+        return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+    
+    private static String getValueString(PlanItem v) {
+        try {
+            return mapper.writeValueAsString(v.getValue());
+        } catch (Exception e) {
+            log.warn("Failed to serialize data: {}", e.getMessage());
+            return "null";
+        }
+    }
+    
+    private static String readFileToString(String filePath) throws Exception {
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            try {
+                path = Paths.get(SignatureUtil.class.getClassLoader().getResource(filePath).toURI());
+            } catch (Exception e) {
+                throw new Exception("File not found: " + filePath);
             }
         }
-        
-        // Strategy 2: Find and replace specific verify method patterns
-        // Look for method signature patterns and replace return false with return true
-        for (int i = 0; i < classBytes.length - 10; i++) {
-            // Pattern: ICONST_0 IRETURN (return false)
-            if (classBytes[i] == 0x03 && classBytes[i + 1] == (byte)0xAC) {
-                // Check if this is in a verify method context
-                // Look for "verify" method name nearby (within 50 bytes)
-                boolean inVerifyMethod = false;
-                for (int j = Math.max(0, i - 50); j < Math.min(classBytes.length - 6, i + 50); j++) {
-                    if (j + 5 < classBytes.length &&
-                        classBytes[j] == 'v' && classBytes[j+1] == 'e' && 
-                        classBytes[j+2] == 'r' && classBytes[j+3] == 'i' && 
-                        classBytes[j+4] == 'f' && classBytes[j+5] == 'y') {
-                        inVerifyMethod = true;
-                        break;
-                    }
-                }
-                
-                if (inVerifyMethod) {
-                    System.out.println("Found 'return false' in verify method at offset: " + i);
-                    classBytes[i] = 0x04; // ICONST_0 -> ICONST_1 (false -> true)
-                    patched = true;
-                    patchCount++;
-                    System.out.println("Changed return false to return true at offset: " + i);
-                }
-            }
-        }
-        
-        // Strategy 3: Replace any remaining SignatureException constructors
-        // Look for NEW SignatureException patterns
-        for (int i = 0; i < classBytes.length - 20; i++) {
-            // Look for NEW instruction followed by SignatureException reference
-            if (classBytes[i] == (byte)0xBB) { // NEW instruction
-                // Check if this could be creating a SignatureException
-                // Replace with ICONST_1 IRETURN pattern
-                boolean couldBeException = false;
-                for (int j = i; j < Math.min(classBytes.length - 15, i + 15); j++) {
-                    if (j + 14 < classBytes.length) {
-                        String bytePart = "";
-                        for (int k = 0; k < 15; k++) {
-                            if (j + k < classBytes.length) {
-                                char c = (char)classBytes[j + k];
-                                if (c >= 'A' && c <= 'z') {
-                                    bytePart += c;
-                                }
-                            }
-                        }
-                        if (bytePart.toLowerCase().contains("signatur") || 
-                            bytePart.toLowerCase().contains("exceptio")) {
-                            couldBeException = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (couldBeException) {
-                    System.out.println("Found potential exception creation at offset: " + i);
-                    // Replace NEW with ICONST_1 and continue
-                    classBytes[i] = 0x04;     // ICONST_1
-                    classBytes[i + 1] = (byte)0xAC; // IRETURN
-                    classBytes[i + 2] = 0x00; // NOP
-                    patched = true;
-                    patchCount++;
-                    System.out.println("Replaced exception with return true at offset: " + i);
-                }
-            }
-        }
-        
-        if (!patched) {
-            System.err.println("ERROR: No signature verification patterns found to patch");
-            System.err.println("Class might have different structure than expected");
-            System.exit(1);
-        }
-        
-        Files.write(Paths.get(classPath), classBytes);
-        System.out.println("SUCCESS: Applied " + patchCount + " targeted patches to SignatureUtil");
-        System.out.println("All signature verification should now return true");
+        return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
     }
 }
 EOF
 
-javac TargetedPatcher.java || echo_error "Failed to compile targeted patcher"
+echo_success "Step 8: Compile replacement SignatureUtil"
+cd "$WORK_DIR/replacement"
 
-echo_success "Step 6: Apply targeted patch to SignatureUtil"
-java TargetedPatcher "$EXTRACT_DIR/$SIGNATURE_UTIL_CLASS" || echo_error "Failed to patch SignatureUtil"
+# Build classpath from shared JAR
+CLASSPATH="$SHARED_DIR"
+for jar in $(find "$SHARED_DIR" -name "*.jar" 2>/dev/null); do
+    CLASSPATH="$CLASSPATH:$jar"
+done
 
-echo_success "Step 7: Rebuild containing JAR"
-cd "$EXTRACT_DIR"
-jar -cf "../patched-jar.jar" * || echo_error "Failed to rebuild containing JAR"
+javac -cp "$CLASSPATH" "$SIGNATURE_UTIL_DIR/SignatureUtil.java" || echo_error "Failed to compile replacement SignatureUtil"
+
+echo_success "Step 9: Replace SignatureUtil.class in shared JAR"
+cp "$WORK_DIR/replacement/$SIGNATURE_UTIL_CLASS" "$SHARED_DIR/$SIGNATURE_UTIL_CLASS" || echo_error "Failed to replace SignatureUtil.class"
+
+echo_success "Step 10: Rebuild shared JAR"
+cd "$SHARED_DIR"
+jar -cf "../shared-patched.jar" * || echo_error "Failed to rebuild shared JAR"
+
+echo_success "Step 11: Replace shared JAR in main structure"
 cd "$WORK_DIR"
-cp "patched-jar.jar" "$CONTAINING_JAR"
+cp "shared-patched.jar" "$SHARED_JAR" || echo_error "Failed to replace shared JAR"
 
-echo_success "Step 8: Rebuild main ThingsBoard JAR"
+echo_success "Step 12: Rebuild main ThingsBoard JAR"
 jar -cf "thingsboard-patched.jar" * || echo_error "Failed to rebuild main JAR"
 
-echo_success "Step 9: Install patched JAR"
+echo_success "Step 13: Install patched JAR"
 systemctl stop thingsboard 2>/dev/null || true
 cp "thingsboard-patched.jar" "$THINGSBOARD_JAR"
 chown thingsboard:thingsboard "$THINGSBOARD_JAR" 2>/dev/null || true
 chmod 644 "$THINGSBOARD_JAR"
 
-echo_success "Step 10: Create restore script"
+echo_success "Step 14: Create restore script"
 cat > "$BACKUP_DIR/restore.sh" << 'RESTORE_EOF'
 #!/bin/bash
 systemctl stop thingsboard 2>/dev/null || true
@@ -252,8 +281,9 @@ chmod +x "$BACKUP_DIR/restore.sh"
 trap - ERR
 
 echo ""
-echo_success "🎉 TARGETED PATCH SUCCESSFUL!"
-echo_success "All SignatureUtil.verify() methods bypassed"
-echo_success "Exception throwing replaced with return true"
+echo_success "🎉 NESTED JAR BYPASS SUCCESSFUL!"
+echo_success "shared-1.3.0.jar -> SignatureUtil.class REPLACED"
+echo_success "All verify() methods now return true"
 echo_success "Start: systemctl start thingsboard"
+echo_success "Monitor: journalctl -u thingsboard -f | grep BYPASS"
 echo_success "Restore: $BACKUP_DIR/restore.sh"
