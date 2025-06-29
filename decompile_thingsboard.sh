@@ -62,34 +62,50 @@ echo_info "Extracting ThingsBoard JAR..."
 cd "$WORK_DIR"
 jar -xf "$THINGSBOARD_JAR" >/dev/null 2>&1
 
-# Find license client JAR - specifically client-1.3.0.jar
-echo_info "Searching for client-1.3.0.jar..."
-CLIENT_JAR=$(find . -name "client-1.3.0.jar" | head -1)
+# Find license client JAR - specifically client-1.3.0.jar in BOOT-INF/lib
+echo_info "Searching for client-1.3.0.jar in BOOT-INF/lib..."
+CLIENT_JAR=$(find . -path "*/BOOT-INF/lib/client-1.3.0.jar" | head -1)
 
 if [ -z "$CLIENT_JAR" ]; then
-    # Alternative search for any client-*.jar
-    echo_info "client-1.3.0.jar not found, searching for similar client JARs..."
-    CLIENT_JAR=$(find . -name "client-*.jar" | head -1)
+    echo_info "client-1.3.0.jar not found in expected location, searching everywhere..."
+    CLIENT_JAR=$(find . -name "client-1.3.0.jar" | head -1)
 fi
 
 if [ -z "$CLIENT_JAR" ]; then
-    # Fallback to any client JAR
-    echo_info "Searching for any client JAR..."
-    CLIENT_JAR=$(find . -name "*client*.jar" | head -1)
+    echo_info "client-1.3.0.jar not found, listing JARs in BOOT-INF/lib for manual selection..."
+    echo_info "Available JARs in BOOT-INF/lib/:"
+    find . -path "*/BOOT-INF/lib/*.jar" | grep -E "(client|license)" | head -10
+    
+    # Manual fallback - look for any client JAR that might contain license code
+    for potential_jar in $(find . -path "*/BOOT-INF/lib/*client*.jar"); do
+        jar_name=$(basename "$potential_jar")
+        echo_info "Checking potential license client: $jar_name"
+        
+        # Quick check for license-related classes
+        if jar -tf "$potential_jar" 2>/dev/null | grep -q -E "(License|Signature|TbClient|CheckInstance)"; then
+            echo_info "✅ Found license classes in: $jar_name"
+            CLIENT_JAR="$potential_jar"
+            break
+        fi
+    done
 fi
 
 if [ -z "$CLIENT_JAR" ]; then
-    echo_error "No client JAR found!"
-    echo_info "Available JARs:"
-    find . -name "*.jar" | head -10
+    echo_error "client-1.3.0.jar not found!"
+    echo_info "Please check the exact filename. Available client JARs:"
+    find . -path "*/BOOT-INF/lib/*" -name "*client*" | head -5
     exit 1
 fi
 
-echo_info "Found client JAR: $CLIENT_JAR"
+echo_info "Found license client JAR: $CLIENT_JAR"
 
-# Show contents of client JAR
-echo_info "Checking contents of client-1.3.0.jar..."
-jar -tf "$CLIENT_JAR" | grep -E "\.(class|properties|xml)$" | head -20
+# Show contents of client JAR to verify it's the right one
+echo_info "Verifying JAR contents..."
+echo_info "Classes in JAR:"
+jar -tf "$CLIENT_JAR" | grep "\.class$" | head -10
+
+echo_info "Looking for specific license classes:"
+jar -tf "$CLIENT_JAR" | grep -i -E "(TbLicenseClient|AbstractTbLicenseClient|SignatureUtil|LicenseValidator|CheckInstance)" || echo "No obvious license classes found"
 
 # Extract client JAR
 CLIENT_DIR="$WORK_DIR/client_extracted"
