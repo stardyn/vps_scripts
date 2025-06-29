@@ -1,9 +1,9 @@
 #!/bin/bash
 
+#apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/thingsboard_bytecode_injection.sh && dos2unix thingsboard_bytecode_injection.sh && chmod +x thingsboard_bytecode_injection.sh && ./thingsboard_bytecode_injection.sh
+
 # ThingsBoard License Bypass - Bytecode Injection
 # This script modifies the license verification bytecode
-
-#apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/thingsboard_bytecode_injection.sh && dos2unix thingsboard_bytecode_injection.sh && chmod +x thingsboard_bytecode_injection.sh && ./thingsboard_bytecode_injection.sh
 
 set -e
 
@@ -11,6 +11,7 @@ echo "🔧 ThingsBoard License Bytecode Injection"
 echo "========================================"
 
 # Configuration
+THINGSBOARD_JAR="/usr/share/thingsboard/bin/thingsboard.jar"
 THINGSBOARD_DIR="/tmp/thingsboard-analysis"
 INJECTION_DIR="/tmp/license-injection"
 BACKUP_DIR="/tmp/license-backup"
@@ -20,16 +21,31 @@ mkdir -p "$INJECTION_DIR"
 mkdir -p "$BACKUP_DIR"
 cd "$INJECTION_DIR"
 
-echo "📦 Step 2: Extract and backup original JARs"
-# Find license client JAR
-LICENSE_JAR=$(find "$THINGSBOARD_DIR" -name "*client*.jar" -type f | head -1)
-echo "Found license JAR: $LICENSE_JAR"
+echo "📦 Step 2: Extract and backup ThingsBoard JAR"
+echo "🎯 Using ThingsBoard JAR: $THINGSBOARD_JAR"
 
-# Backup original
-cp "$LICENSE_JAR" "$BACKUP_DIR/client-original.jar"
+# Backup original JAR
+cp "$THINGSBOARD_JAR" "$BACKUP_DIR/thingsboard-original.jar"
+echo "✅ Original JAR backed up"
 
-# Extract JAR
-jar -xf "$LICENSE_JAR"
+# Extract main JAR
+echo "📦 Extracting main ThingsBoard JAR..."
+jar -xf "$THINGSBOARD_JAR"
+
+# Check if license classes exist in extracted content
+if [ -f "BOOT-INF/lib/client-1.3.0.jar" ]; then
+    echo "✅ Found license client JAR inside main JAR"
+    # Extract the license client JAR
+    cd BOOT-INF/lib
+    jar -xf client-1.3.0.jar
+    cd ../../
+elif find . -name "*TbLicenseClient*" -type f | grep -q .; then
+    echo "✅ License classes found in main JAR"
+else
+    echo "❌ License classes not found! Searching..."
+    find . -name "*.class" | grep -i license | head -10
+    exit 1
+fi
 
 echo "📦 Step 3: Download bytecode manipulation tools"
 # Download ASM library for bytecode manipulation
@@ -174,24 +190,38 @@ echo "📦 Step 5: Compile and run bytecode injector"
 javac -cp "asm-9.5.jar:asm-commons-9.5.jar:asm-util-9.5.jar" BytecodeInjector.java
 java -cp ".:asm-9.5.jar:asm-commons-9.5.jar:asm-util-9.5.jar" BytecodeInjector
 
-echo "📦 Step 6: Rebuild JAR with patched classes"
-jar -cf client-patched.jar *
+echo "📦 Step 6: Rebuild ThingsBoard JAR with patched classes"
+# Rebuild the main JAR with patched classes
+jar -cf thingsboard-patched.jar *
 
-echo "📦 Step 7: Replace original JAR"
-cp client-patched.jar "$LICENSE_JAR"
+echo "📦 Step 7: Install patched JAR"
+# Stop ThingsBoard first
+echo "🛑 Stopping ThingsBoard..."
+systemctl stop thingsboard 2>/dev/null || true
 
-echo "📦 Step 8: Verification"
-echo "Original JAR backed up to: $BACKUP_DIR/client-original.jar"
-echo "Patched JAR installed to: $LICENSE_JAR"
+# Replace original JAR  
+cp thingsboard-patched.jar "$THINGSBOARD_JAR"
+echo "✅ Patched JAR installed"
+
+echo "📦 Step 8: Set permissions and ownership"
+chown thingsboard:thingsboard "$THINGSBOARD_JAR"
+chmod 644 "$THINGSBOARD_JAR"
+
+echo "📦 Step 9: Verification"
+echo "Original JAR backed up to: $BACKUP_DIR/thingsboard-original.jar"
+echo "Patched JAR installed to: $THINGSBOARD_JAR"
 
 # Create restoration script
-cat > "$BACKUP_DIR/restore.sh" << 'EOF'
+cat > "$BACKUP_DIR/restore.sh" << 'RESTORE_EOF'
 #!/bin/bash
-echo "🔄 Restoring original ThingsBoard license JAR..."
-LICENSE_JAR=$(find /tmp/thingsboard-analysis -name "*client*.jar" -type f | head -1)
-cp /tmp/license-backup/client-original.jar "$LICENSE_JAR"
+echo "🔄 Restoring original ThingsBoard JAR..."
+systemctl stop thingsboard 2>/dev/null || true
+cp /tmp/license-backup/thingsboard-original.jar /usr/share/thingsboard/bin/thingsboard.jar
+chown thingsboard:thingsboard /usr/share/thingsboard/bin/thingsboard.jar
+chmod 644 /usr/share/thingsboard/bin/thingsboard.jar
 echo "✅ Original JAR restored!"
-EOF
+echo "🚀 Start ThingsBoard: systemctl start thingsboard"
+RESTORE_EOF
 chmod +x "$BACKUP_DIR/restore.sh"
 
 echo ""
@@ -202,10 +232,15 @@ echo "   1. SignatureUtil.verify() → Empty method (always passes)"
 echo "   2. TbLicenseClient.persistInstanceData() → Skips signature verification"
 echo ""
 echo "🚀 Next steps:"
-echo "   1. Restart ThingsBoard: systemctl restart thingsboard"
-echo "   2. Check if license verification passes"
+echo "   1. Start ThingsBoard: systemctl start thingsboard"
+echo "   2. Check logs: journalctl -u thingsboard -f"
+echo "   3. Monitor license verification"
 echo ""
 echo "🔄 To restore original (if needed):"
 echo "   $BACKUP_DIR/restore.sh"
+echo ""
+echo "📋 Quick commands:"
+echo "   systemctl start thingsboard"
+echo "   journalctl -u thingsboard -f --since '1 minute ago'"
 echo ""
 echo "⚠️  Note: This is for testing/development purposes only!"
