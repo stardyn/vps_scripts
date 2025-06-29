@@ -3,7 +3,6 @@
 #apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/thingsboard_bytecode_injection.sh && dos2unix thingsboard_bytecode_injection.sh && chmod +x thingsboard_bytecode_injection.sh && ./thingsboard_bytecode_injection.sh
 #rm -rf /tmp/*
 #rm -rf /tmp/.*  2>/dev/null || true
-
 #!/bin/bash
 
 # Simple ThingsBoard License Signature Bypass
@@ -32,12 +31,27 @@ echo "📦 Step 3: Find TbLicenseClient.class"
 TBCLIENT_CLASS="BOOT-INF/lib/org/thingsboard/license/client/TbLicenseClient.class"
 
 if [ ! -f "$TBCLIENT_CLASS" ]; then
-    echo "❌ TbLicenseClient.class not found at expected location!"
-    find . -name "*TbLicenseClient.class" -type f
-    exit 1
+    echo "❌ TbLicenseClient.class not found at: $TBCLIENT_CLASS"
+    echo "🔍 Searching for TbLicenseClient.class..."
+    
+    found_classes=$(find . -name "*TbLicenseClient.class" -type f)
+    if [ -n "$found_classes" ]; then
+        echo "📍 Found TbLicenseClient classes at:"
+        echo "$found_classes"
+        TBCLIENT_CLASS=$(echo "$found_classes" | head -1)
+        echo "✅ Using: $TBCLIENT_CLASS"
+    else
+        echo "❌ ERROR: TbLicenseClient.class not found anywhere!"
+        echo "📋 Available license-related classes:"
+        find . -name "*license*" -type f | head -10
+        echo ""
+        echo "🔧 JAR structure:"
+        ls -la BOOT-INF/lib/ | grep -i client | head -5
+        exit 1
+    fi
 fi
 
-echo "✅ Found: $TBCLIENT_CLASS"
+echo "✅ Target class: $TBCLIENT_CLASS"
 
 echo "📦 Step 4: Create simple bytecode patcher"
 cat > SimplePatcher.java << 'EOF'
@@ -91,12 +105,9 @@ public class SimplePatcher {
             Files.write(Paths.get(classPath), classBytes);
             System.out.println("✅ Class file patched successfully!");
         } else {
-            System.out.println("⚠️ No method calls found to patch");
-            
-            // Alternative: Create a completely new class file that skips verification
-            System.out.println("🎯 Using alternative approach: Delete the class file");
-            Files.delete(Paths.get(classPath));
-            System.out.println("✅ Class file deleted - this will cause ClassNotFoundException and skip verification");
+            System.out.println("❌ ERROR: No method calls found to patch!");
+            System.out.println("❌ Cannot bypass signature verification!");
+            System.exit(1);
         }
     }
 }
@@ -104,7 +115,20 @@ EOF
 
 echo "📦 Step 5: Compile and run patcher"
 javac SimplePatcher.java
-java SimplePatcher "$TBCLIENT_CLASS"
+
+if ! java SimplePatcher "$TBCLIENT_CLASS"; then
+    echo "❌ ERROR: Patching failed!"
+    echo "🔧 Attempting manual bytecode analysis..."
+    
+    # Show some info about the class file
+    xxd "$TBCLIENT_CLASS" | head -20
+    echo ""
+    echo "📋 Class file size: $(wc -c < "$TBCLIENT_CLASS") bytes"
+    
+    # Try alternative approach with proper error handling
+    echo "🎯 Alternative: Use ASM-based approach..."
+    exit 1
+fi
 
 echo "📦 Step 6: Rebuild JAR"
 jar -cf thingsboard-patched.jar *
