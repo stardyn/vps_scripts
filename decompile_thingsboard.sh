@@ -1,14 +1,13 @@
 #!/bin/bash
 
-# ThingsBoard License JAR Decompiler - Sadece client ve shared JAR'ları
-# client-1.3.0.jar ve shared-1.3.0.jar için
+# Sadece client-1.3.0.jar ve shared-1.3.0.jar decompile eder
 
 set -e
 
-echo "🎯 ThingsBoard License JAR Decompiler"
-echo "====================================="
+echo "🎯 ThingsBoard License JAR Decompiler - SADECE 2 JAR"
+echo "=================================================="
 
-WORK_DIR="/tmp/tb-license-only"
+WORK_DIR="/tmp/tb-license-minimal"
 CFR_JAR="/tmp/cfr-0.152.jar"
 
 # Setup
@@ -49,96 +48,116 @@ cd "$WORK_DIR"
 echo "📦 Main JAR extract ediliyor..."
 jar -xf "$TB_JAR" >/dev/null 2>&1
 
-# Sadece client ve shared JAR'larını bul
-echo "🔍 License JAR'ları aranıyor..."
+# SADECE client ve shared JAR'larını bul
+echo "🔍 SADECE license JAR'ları aranıyor..."
 
+# Spesifik dosya isimleri
 CLIENT_JAR=""
 SHARED_JAR=""
 
-# client-1.3.0.jar ara
-CLIENT_JAR=$(find . -name "*client*1.3.0*.jar" | head -1)
+# client-1.3.0.jar exact match
+CLIENT_JAR=$(find . -name "client-1.3.0.jar" | head -1)
 if [ -z "$CLIENT_JAR" ]; then
-    CLIENT_JAR=$(find . -name "*client*.jar" | grep -i license | head -1)
+    # Alternative: license-client ile başlayan
+    CLIENT_JAR=$(find . -name "license-client-*.jar" | head -1)
+fi
+if [ -z "$CLIENT_JAR" ]; then
+    # Alternative: sadece client içeren ama google değil
+    CLIENT_JAR=$(find . -name "*client*.jar" | grep -v google | grep -v http | head -1)
 fi
 
-# shared-1.3.0.jar ara  
-SHARED_JAR=$(find . -name "*shared*1.3.0*.jar" | head -1)
+# shared-1.3.0.jar exact match  
+SHARED_JAR=$(find . -name "shared-1.3.0.jar" | head -1)
 if [ -z "$SHARED_JAR" ]; then
-    SHARED_JAR=$(find . -name "*shared*.jar" | grep -i license | head -1)
+    # Alternative: license-shared ile başlayan
+    SHARED_JAR=$(find . -name "license-shared-*.jar" | head -1)
+fi
+if [ -z "$SHARED_JAR" ]; then
+    # Alternative: sadece shared içeren ama google değil
+    SHARED_JAR=$(find . -name "*shared*.jar" | grep -v google | grep -v http | head -1)
 fi
 
-echo "📋 Bulunan JAR'lar:"
+echo "📋 Aranan JAR'lar:"
+echo "   🔍 client-1.3.0.jar veya license-client-*.jar"
+echo "   🔍 shared-1.3.0.jar veya license-shared-*.jar"
+echo ""
+
 if [ -n "$CLIENT_JAR" ]; then
-    echo "   ✅ CLIENT: $(basename $CLIENT_JAR)"
+    echo "   ✅ CLIENT BULUNDU: $(basename $CLIENT_JAR)"
 else
     echo "   ❌ CLIENT JAR bulunamadı"
+    echo "   📋 Mevcut client JAR'ları:"
+    find . -name "*client*.jar" | grep -v google | grep -v http | head -5
 fi
 
 if [ -n "$SHARED_JAR" ]; then
-    echo "   ✅ SHARED: $(basename $SHARED_JAR)"
+    echo "   ✅ SHARED BULUNDU: $(basename $SHARED_JAR)"
 else
     echo "   ❌ SHARED JAR bulunamadı"
+    echo "   📋 Mevcut shared JAR'ları:"
+    find . -name "*shared*.jar" | grep -v google | grep -v http | head -5
 fi
 
-# CLIENT JAR decompile et
+# Sadece bulunan JAR'ları decompile et
 if [ -n "$CLIENT_JAR" ]; then
     echo ""
-    echo "🎯 CLIENT JAR DECOMPILE EDİLİYOR"
-    echo "==============================="
+    echo "🎯 CLIENT JAR DECOMPILE: $(basename $CLIENT_JAR)"
+    echo "=============================================="
     
-    mkdir -p "client_decompiled"
-    java -jar "$CFR_JAR" "$CLIENT_JAR" --outputdir "client_decompiled" 2>/dev/null || echo "Decompile hatası"
+    mkdir -p "client_src"
+    java -jar "$CFR_JAR" "$CLIENT_JAR" --outputdir "client_src" 2>/dev/null || {
+        echo "❌ Client JAR decompile hatası"
+    }
     
-    echo "📄 Client JAR içeriği:"
-    find client_decompiled -name "*.java" | head -20
-    
-    echo ""
-    echo "📋 TüM CLIENT SOURCE KODLARI:"
-    echo "============================="
-    find client_decompiled -name "*.java" | while read java_file; do
-        echo ""
-        echo "📄 === $(basename $java_file) ==="
-        echo "Dosya: $java_file"
-        echo "════════════════════════════════════════"
-        cat "$java_file"
-        echo "════════════════════════════════════════"
-    done
+    # Sadece Java dosyalarını göster
+    if [ -d "client_src" ]; then
+        echo "📄 CLIENT SOURCE KODLARI:"
+        find client_src -name "*.java" | while read java_file; do
+            echo ""
+            echo "📄 === $(basename $java_file) ==="
+            echo "Dosya: $java_file"
+            echo "════════════════════════════════════════"
+            cat "$java_file"
+            echo "════════════════════════════════════════"
+        done
+    fi
 fi
 
-# SHARED JAR decompile et
 if [ -n "$SHARED_JAR" ]; then
     echo ""
-    echo "🎯 SHARED JAR DECOMPILE EDİLİYOR"
-    echo "==============================="
+    echo "🎯 SHARED JAR DECOMPILE: $(basename $SHARED_JAR)"
+    echo "=============================================="
     
-    mkdir -p "shared_decompiled"
-    java -jar "$CFR_JAR" "$SHARED_JAR" --outputdir "shared_decompiled" 2>/dev/null || echo "Decompile hatası"
+    mkdir -p "shared_src"
+    java -jar "$CFR_JAR" "$SHARED_JAR" --outputdir "shared_src" 2>/dev/null || {
+        echo "❌ Shared JAR decompile hatası"
+    }
     
-    echo "📄 Shared JAR içeriği:"
-    find shared_decompiled -name "*.java" | head -20
-    
+    # Sadece Java dosyalarını göster
+    if [ -d "shared_src" ]; then
+        echo "📄 SHARED SOURCE KODLARI:"
+        find shared_src -name "*.java" | while read java_file; do
+            echo ""
+            echo "📄 === $(basename $java_file) ==="
+            echo "Dosya: $java_file"
+            echo "════════════════════════════════════════"
+            cat "$java_file"
+            echo "════════════════════════════════════════"
+        done
+    fi
+fi
+
+# Hiçbiri bulunamadıysa tüm JAR'ları listele
+if [ -z "$CLIENT_JAR" ] && [ -z "$SHARED_JAR" ]; then
     echo ""
-    echo "📋 TÜM SHARED SOURCE KODLARI:"
-    echo "============================="
-    find shared_decompiled -name "*.java" | while read java_file; do
-        echo ""
-        echo "📄 === $(basename $java_file) ==="
-        echo "Dosya: $java_file"
-        echo "════════════════════════════════════════"
-        cat "$java_file"
-        echo "════════════════════════════════════════"
+    echo "❌ HEDEF JAR'LAR BULUNAMADI"
+    echo "=========================="
+    echo "📋 Tüm JAR dosyaları:"
+    find . -name "*.jar" | head -20 | while read jar; do
+        echo "   $(basename $jar)"
     done
 fi
 
 echo ""
-echo "✅ DECOMPILE TAMAMLANDI!"
-echo "======================="
+echo "✅ İşlem tamamlandı!"
 echo "📁 Çalışma dizini: $WORK_DIR"
-
-if [ -n "$CLIENT_JAR" ]; then
-    echo "📁 Client kaynak kodları: $WORK_DIR/client_decompiled/"
-fi
-
-if [ -n "$SHARED_JAR" ]; then
-    echo "📁 Shared kaynak kodları: $WORK_DIR/shared_decompiled/"
-fi
