@@ -94,14 +94,9 @@ if [ -n "$CLIENT_JAR" ]; then
     
     # Sadece Java dosyalarını göster
     if [ -d "client_src" ]; then
-        echo "📄 CLIENT SOURCE KODLARI:"
+        echo "📄 CLIENT DECOMPILED FILES:"
         find client_src -name "*.java" | while read java_file; do
-            echo ""
-            echo "📄 === $(basename $java_file) ==="
-            echo "Dosya: $java_file"
-            echo "════════════════════════════════════════"
-            cat "$java_file"
-            echo "════════════════════════════════════════"
+            echo "   ✅ $(basename $java_file) -> $java_file"
         done
     fi
 fi
@@ -118,27 +113,11 @@ if [ -n "$SHARED_JAR" ]; then
     
     # Sadece Java dosyalarını göster
     if [ -d "shared_src" ]; then
-        echo "📄 SHARED SOURCE KODLARI:"
+        echo "📄 SHARED DECOMPILED FILES:"
         find shared_src -name "*.java" | while read java_file; do
-            echo ""
-            echo "📄 === $(basename $java_file) ==="
-            echo "Dosya: $java_file"
-            echo "════════════════════════════════════════"
-            cat "$java_file"
-            echo "════════════════════════════════════════"
+            echo "   ✅ $(basename $java_file) -> $java_file"
         done
     fi
-fi
-
-# Hiçbiri bulunamadıysa tüm JAR'ları listele
-if [ -z "$CLIENT_JAR" ] && [ -z "$SHARED_JAR" ]; then
-    echo ""
-    echo "❌ HEDEF JAR'LAR BULUNAMADI"
-    echo "=========================="
-    echo "📋 Tüm JAR dosyaları:"
-    find . -name "*.jar" | head -20 | while read jar; do
-        echo "   $(basename $jar)"
-    done
 fi
 
 echo ""
