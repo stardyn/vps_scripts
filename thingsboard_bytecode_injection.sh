@@ -1,9 +1,9 @@
 #!/bin/bash
 
 #apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/thingsboard_bytecode_injection.sh && dos2unix thingsboard_bytecode_injection.sh && chmod +x thingsboard_bytecode_injection.sh && ./thingsboard_bytecode_injection.sh
+#rm -rf /tmp/*
+#rm -rf /tmp/.*  2>/dev/null || true
 
-# ThingsBoard License Bypass - Bytecode Injection
-# This script modifies the license verification bytecode
 
 #!/bin/bash
 
@@ -87,13 +87,55 @@ public class BytecodeInjector {
     }
     
     static void patchSignatureUtilVerify() throws Exception {
-        String classPath = "org/thingsboard/license/shared/signature/SignatureUtil.class";
-        if (!Files.exists(Paths.get(classPath))) {
-            System.out.println("⚠️ SignatureUtil.class not found, skipping...");
-            return;
+        // Try multiple possible locations
+        String[] possiblePaths = {
+            "org/thingsboard/license/shared/signature/SignatureUtil.class",
+            "BOOT-INF/lib/org/thingsboard/license/shared/signature/SignatureUtil.class",
+            "BOOT-INF/classes/org/thingsboard/license/shared/signature/SignatureUtil.class"
+        };
+        
+        boolean found = false;
+        for (String classPath : possiblePaths) {
+            if (Files.exists(Paths.get(classPath))) {
+                System.out.println("🎯 Found SignatureUtil at: " + classPath);
+                found = true;
+                break;
+            }
         }
         
-        System.out.println("🎯 Patching SignatureUtil.verify()...");
+        if (!found) {
+            System.out.println("⚠️ SignatureUtil.class not found in main JAR");
+            System.out.println("🔍 Checking client-1.3.0.jar...");
+            
+            // Extract and check client JAR
+            Path clientJar = Paths.get("BOOT-INF/lib/client-1.3.0.jar");
+            if (Files.exists(clientJar)) {
+                System.out.println("📦 Extracting client-1.3.0.jar...");
+                try {
+                    ProcessBuilder pb = new ProcessBuilder("jar", "-xf", "BOOT-INF/lib/client-1.3.0.jar");
+                    pb.directory(new File("BOOT-INF/lib"));
+                    Process p = pb.start();
+                    p.waitFor();
+                    
+                    // Check again after extraction
+                    String clientPath = "BOOT-INF/lib/org/thingsboard/license/shared/signature/SignatureUtil.class";
+                    if (Files.exists(Paths.get(clientPath))) {
+                        System.out.println("✅ Found SignatureUtil in client JAR!");
+                        patchSignatureUtilAt(clientPath);
+                        return;
+                    }
+                } catch (Exception e) {
+                    System.out.println("⚠️ Failed to extract client JAR: " + e.getMessage());
+                }
+            }
+            
+            System.out.println("❌ SignatureUtil not found anywhere, skipping...");
+            return;
+        }
+    }
+    
+    static void patchSignatureUtilAt(String classPath) throws Exception {
+        System.out.println("🎯 Patching SignatureUtil at: " + classPath);
         
         byte[] classBytes = Files.readAllBytes(Paths.get(classPath));
         
@@ -143,7 +185,7 @@ public class BytecodeInjector {
     }
     
     static void patchTbLicenseClientPersist() throws Exception {
-        String classPath = "org/thingsboard/license/client/TbLicenseClient.class";
+        String classPath = "BOOT-INF/lib/org/thingsboard/license/client/TbLicenseClient.class";
         if (!Files.exists(Paths.get(classPath))) {
             System.out.println("⚠️ TbLicenseClient.class not found, skipping...");
             return;
@@ -170,8 +212,7 @@ public class BytecodeInjector {
                         public void visitMethodInsn(int opcode, String owner, String name, 
                                                    String descriptor, boolean isInterface) {
                             // Skip SignatureUtil.verify() call
-                            if ("SignatureUtil".equals(owner.substring(owner.lastIndexOf('/') + 1)) && 
-                                "verify".equals(name)) {
+                            if (owner.contains("SignatureUtil") && "verify".equals(name)) {
                                 System.out.println("🎯 Skipping SignatureUtil.verify() call");
                                 // Pop the arguments from stack but don't call the method
                                 mv.visitInsn(Opcodes.POP);  // Pop CheckInstanceResponse
