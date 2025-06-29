@@ -5,8 +5,8 @@
 
 set -e
 
-echo "🔧 ThingsBoard SignatureUtil Hex-Level Bypass"
-echo "============================================"
+echo "🔧 ThingsBoard SignatureUtil Hex-Level Bypass v2.0"
+echo "=================================================="
 
 # Configuration
 THINGSBOARD_JAR="/usr/share/thingsboard/bin/thingsboard.jar"
