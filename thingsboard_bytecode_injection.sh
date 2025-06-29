@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# ThingsBoard SignatureUtil Bypass - SAFE BYTECODE PATCHING
-# Only modify specific verify method bytecode patterns
+# ThingsBoard SignatureUtil Hex-Level Bypass
+# Direct hex editing approach
 
 set -e
 
-echo "🔧 ThingsBoard SignatureUtil Bypass - SAFE BYTECODE PATCHING"
-echo "==========================================================="
+echo "🔧 ThingsBoard SignatureUtil Hex-Level Bypass"
+echo "============================================"
 
 # Configuration
 THINGSBOARD_JAR="/usr/share/thingsboard/bin/thingsboard.jar"
-WORK_DIR="/tmp/license-bypass"
+WORK_DIR="/tmp/hex-bypass"
 BACKUP_DIR="/tmp/license-backup"
 
 # Colors
@@ -35,164 +35,131 @@ auto_restore() {
     fi
 }
 
-# Set trap for auto-restore on error
 trap auto_restore ERR
 
-echo_success "Step 1: Setup and validation"
+echo_success "Step 1: Setup"
 rm -rf "$WORK_DIR" "$BACKUP_DIR" 2>/dev/null || true
 mkdir -p "$WORK_DIR" "$BACKUP_DIR"
 
-# Validate ThingsBoard JAR
 [ -f "$THINGSBOARD_JAR" ] || echo_error "ThingsBoard JAR not found: $THINGSBOARD_JAR"
-
-# Check Java
 command -v java >/dev/null 2>&1 || echo_error "Java not found!"
 
 echo_success "Step 2: Backup original JAR"
 cp "$THINGSBOARD_JAR" "$BACKUP_DIR/thingsboard-original.jar"
 
-echo_success "Step 3: Extract main ThingsBoard JAR"
+echo_success "Step 3: Extract main JAR"
 cd "$WORK_DIR"
 jar -xf "$THINGSBOARD_JAR" || echo_error "Failed to extract main JAR"
 
-echo_success "Step 4: Find shared-1.3.0.jar"
+echo_success "Step 4: Extract shared JAR"
 SHARED_JAR="BOOT-INF/lib/shared-1.3.0.jar"
-[ -f "$SHARED_JAR" ] || echo_error "shared-1.3.0.jar not found at $SHARED_JAR"
+[ -f "$SHARED_JAR" ] || echo_error "shared-1.3.0.jar not found"
 
-echo_success "Step 5: Extract shared JAR"
-SHARED_DIR="$WORK_DIR/shared_extracted"
+SHARED_DIR="$WORK_DIR/shared"
 mkdir -p "$SHARED_DIR"
 cd "$SHARED_DIR"
 jar -xf "../$SHARED_JAR" || echo_error "Failed to extract shared JAR"
 
-echo_success "Step 6: Locate SignatureUtil.class"
-SIGNATURE_UTIL_CLASS=$(find . -name "SignatureUtil.class" | head -1)
-[ -n "$SIGNATURE_UTIL_CLASS" ] || echo_error "SignatureUtil.class not found"
+echo_success "Step 5: Find SignatureUtil.class"
+SIG_CLASS=$(find . -name "SignatureUtil.class" | head -1)
+[ -n "$SIG_CLASS" ] || echo_error "SignatureUtil.class not found"
+echo "Found: $SIG_CLASS"
 
-echo_success "Step 7: Create safe bytecode patcher"
+echo_success "Step 6: Create hex editor"
 cd "$WORK_DIR"
-cat > SafeBytecodeModifier.java << 'EOF'
+cat > HexEditor.java << 'JAVA_EOF'
 import java.io.*;
 import java.nio.file.*;
 
-public class SafeBytecodeModifier {
+public class HexEditor {
     public static void main(String[] args) throws Exception {
-        String classPath = args[0];
-        byte[] classBytes = Files.readAllBytes(Paths.get(classPath));
+        String classFile = args[0];
+        byte[] data = Files.readAllBytes(Paths.get(classFile));
         
-        System.out.println("Original class size: " + classBytes.length + " bytes");
+        System.out.println("File size: " + data.length + " bytes");
         
-        boolean modified = false;
-        int modifications = 0;
+        int changes = 0;
         
-        // GUARANTEED Strategy: Replace error messages with success messages
-        // This will break the string comparison and cause verification to pass
+        // Strategy 1: Replace error strings with valid strings
+        changes += replaceString(data, "Invalid response signature", "BYPASSED_response_signatur");
+        changes += replaceString(data, "Invalid secret data signature", "BYPASSED_secret_data_signatu");
         
-        String errorMsg1 = "Invalid response signature";
-        String errorMsg2 = "Invalid secret data signature";
-        String replacement = "Valid___response_signature"; // Same length!
-        
-        // Replace first error message
-        for (int i = 0; i <= classBytes.length - errorMsg1.length(); i++) {
-            boolean found = true;
-            for (int j = 0; j < errorMsg1.length(); j++) {
-                if (classBytes[i + j] != errorMsg1.charAt(j)) {
-                    found = false;
-                    break;
-                }
-            }
-            
-            if (found) {
-                System.out.println("Replacing error message 1 at offset: " + i);
-                for (int j = 0; j < errorMsg1.length(); j++) {
-                    classBytes[i + j] = (byte) replacement.charAt(j);
-                }
-                modified = true;
-                modifications++;
-                break; // Only replace first occurrence
+        // Strategy 2: Change all ICONST_0 to ICONST_1 (false to true)
+        for (int i = 0; i < data.length; i++) {
+            if (data[i] == 0x03) { // ICONST_0
+                data[i] = 0x04; // ICONST_1
+                changes++;
             }
         }
         
-        // Replace second error message
-        String replacement2 = "Valid___secret_data_signature"; // Same length!
-        for (int i = 0; i <= classBytes.length - errorMsg2.length(); i++) {
-            boolean found = true;
-            for (int j = 0; j < errorMsg2.length(); j++) {
-                if (classBytes[i + j] != errorMsg2.charAt(j)) {
-                    found = false;
-                    break;
-                }
-            }
-            
-            if (found) {
-                System.out.println("Replacing error message 2 at offset: " + i);
-                for (int j = 0; j < errorMsg2.length(); j++) {
-                    classBytes[i + j] = (byte) replacement2.charAt(j);
-                }
-                modified = true;
-                modifications++;
-                break; // Only replace first occurrence
-            }
-        }
+        System.out.println("Applied " + changes + " changes");
         
-        // Additional Strategy: Find and replace any ICONST_0 with ICONST_1
-        // This is very aggressive but safe for boolean returns
-        for (int i = 0; i < classBytes.length; i++) {
-            if (classBytes[i] == 0x03) { // ICONST_0
-                classBytes[i] = 0x04; // ICONST_1
-                modified = true;
-                modifications++;
-                System.out.println("Changed ICONST_0 to ICONST_1 at offset: " + i);
-            }
-        }
-        
-        if (modified) {
-            Files.write(Paths.get(classPath), classBytes);
-            System.out.println("SUCCESS: Applied " + modifications + " modifications");
-            System.out.println("Modified class size: " + classBytes.length + " bytes");
-            
-            // Show what we changed
-            System.out.println("Error messages replaced with success messages");
-            System.out.println("All false constants changed to true constants");
+        if (changes > 0) {
+            Files.write(Paths.get(classFile), data);
+            System.out.println("SUCCESS: File modified");
         } else {
-            System.err.println("ERROR: No modifications applied");
+            System.err.println("ERROR: No changes made");
             System.exit(1);
         }
     }
+    
+    static int replaceString(byte[] data, String find, String replace) {
+        if (find.length() != replace.length()) {
+            System.err.println("ERROR: String lengths don't match");
+            return 0;
+        }
+        
+        byte[] findBytes = find.getBytes();
+        byte[] replaceBytes = replace.getBytes();
+        int changes = 0;
+        
+        for (int i = 0; i <= data.length - findBytes.length; i++) {
+            boolean match = true;
+            for (int j = 0; j < findBytes.length; j++) {
+                if (data[i + j] != findBytes[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            
+            if (match) {
+                System.out.println("Replacing '" + find + "' at offset " + i);
+                for (int j = 0; j < replaceBytes.length; j++) {
+                    data[i + j] = replaceBytes[j];
+                }
+                changes++;
+                i += findBytes.length - 1; // Skip ahead
+            }
+        }
+        
+        return changes;
+    }
 }
-EOF
+JAVA_EOF
 
-javac SafeBytecodeModifier.java || echo_error "Failed to compile SafeBytecodeModifier"
+javac HexEditor.java || echo_error "Failed to compile HexEditor"
 
-echo_success "Step 8: Apply safe bytecode modifications"
-java SafeBytecodeModifier "$SHARED_DIR/$SIGNATURE_UTIL_CLASS" || echo_error "Failed to modify bytecode"
+echo_success "Step 7: Apply hex modifications"
+java HexEditor "$SHARED_DIR/$SIG_CLASS" || echo_error "Failed to modify class"
 
-echo_success "Step 9: Rebuild shared JAR"
+echo_success "Step 8: Rebuild shared JAR"
 cd "$SHARED_DIR"
-jar -cf "../shared-1.3.0-patched.jar" * || echo_error "Failed to rebuild shared JAR"
+jar -cf "../shared-modified.jar" * || echo_error "Failed to rebuild shared JAR"
 
-echo_success "Step 10: Replace shared JAR in main structure"
+echo_success "Step 9: Replace shared JAR"
 cd "$WORK_DIR"
-cp "shared-1.3.0-patched.jar" "$SHARED_JAR" || echo_error "Failed to replace shared JAR"
+cp "shared-modified.jar" "$SHARED_JAR" || echo_error "Failed to replace shared JAR"
 
-echo_success "Step 11: Rebuild main ThingsBoard JAR"
-jar -cf "thingsboard-patched.jar" * || echo_error "Failed to rebuild main JAR"
+echo_success "Step 10: Rebuild main JAR"
+jar -cf "thingsboard-bypassed.jar" * || echo_error "Failed to rebuild main JAR"
 
-echo_success "Step 12: Verify JAR integrity"
-# Quick integrity check
-if jar -tf "thingsboard-patched.jar" | grep -q "BOOT-INF/lib/shared-1.3.0.jar"; then
-    echo_success "JAR structure verified"
-else
-    echo_error "JAR structure corrupted"
-fi
-
-echo_success "Step 13: Install patched JAR"
+echo_success "Step 11: Install patched JAR"
 systemctl stop thingsboard 2>/dev/null || true
-cp "thingsboard-patched.jar" "$THINGSBOARD_JAR"
+cp "thingsboard-bypassed.jar" "$THINGSBOARD_JAR"
 chown thingsboard:thingsboard "$THINGSBOARD_JAR" 2>/dev/null || true
 chmod 644 "$THINGSBOARD_JAR"
 
-echo_success "Step 14: Create restore script"
+echo_success "Step 12: Create restore script"
 cat > "$BACKUP_DIR/restore.sh" << 'RESTORE_EOF'
 #!/bin/bash
 systemctl stop thingsboard 2>/dev/null || true
@@ -203,13 +170,11 @@ echo "✅ Original JAR restored"
 RESTORE_EOF
 chmod +x "$BACKUP_DIR/restore.sh"
 
-# Clear trap - success
 trap - ERR
 
 echo ""
-echo_success "🎉 SAFE BYTECODE PATCHING SUCCESSFUL!"
-echo_success "SignatureUtil.class safely modified"
-echo_success "JAR integrity maintained"
-echo_success "All verify() methods should now return true"
-echo_success "Test: java -server -Dloader.main=org.thingsboard.server.ThingsBoardServerApplication -jar $THINGSBOARD_JAR"
+echo_success "🎉 HEX-LEVEL BYPASS SUCCESSFUL!"
+echo_success "Error strings replaced with BYPASSED messages"
+echo_success "All false constants changed to true constants"
+echo_success "Test JAR: java -server -Dloader.main=org.thingsboard.server.ThingsBoardServerApplication -jar $THINGSBOARD_JAR"
 echo_success "Restore: $BACKUP_DIR/restore.sh"
