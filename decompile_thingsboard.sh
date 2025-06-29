@@ -62,39 +62,34 @@ echo_info "Extracting ThingsBoard JAR..."
 cd "$WORK_DIR"
 jar -xf "$THINGSBOARD_JAR" >/dev/null 2>&1
 
-# Find license client JAR
-echo_info "Searching for license client JAR..."
-CLIENT_JAR=$(find . -name "*client*.jar" | grep -i license | head -1)
+# Find license client JAR - specifically client-1.3.0.jar
+echo_info "Searching for client-1.3.0.jar..."
+CLIENT_JAR=$(find . -name "client-1.3.0.jar" | head -1)
 
 if [ -z "$CLIENT_JAR" ]; then
-    # Alternative search
-    CLIENT_JAR=$(find . -name "*.jar" | xargs -I {} sh -c 'jar -tf "{}" 2>/dev/null | grep -q -i "license.*client" && echo "{}"' | head -1)
+    # Alternative search for any client-*.jar
+    echo_info "client-1.3.0.jar not found, searching for similar client JARs..."
+    CLIENT_JAR=$(find . -name "client-*.jar" | head -1)
 fi
 
 if [ -z "$CLIENT_JAR" ]; then
-    echo_warn "License client JAR not found, searching for license classes directly..."
-    
-    # Search in all JARs for license classes
-    echo_info "Checking JARs for license classes..."
-    for jar_file in $(find . -name "*.jar"); do
-        if jar -tf "$jar_file" 2>/dev/null | grep -q -i "TbLicenseClient\|LicenseClient\|SignatureUtil"; then
-            echo_info "Found license classes in: $jar_file"
-            CLIENT_JAR="$jar_file"
-            break
-        fi
-    done
+    # Fallback to any client JAR
+    echo_info "Searching for any client JAR..."
+    CLIENT_JAR=$(find . -name "*client*.jar" | head -1)
 fi
 
 if [ -z "$CLIENT_JAR" ]; then
-    echo_error "No license client JAR or classes found!"
-    echo_info "Available JARs with 'client' in name:"
-    find . -name "*client*.jar" | head -5
-    echo_info "Available JARs with 'license' in name:"  
-    find . -name "*license*.jar" | head -5
+    echo_error "No client JAR found!"
+    echo_info "Available JARs:"
+    find . -name "*.jar" | head -10
     exit 1
 fi
 
-echo_info "Found license client: $CLIENT_JAR"
+echo_info "Found client JAR: $CLIENT_JAR"
+
+# Show contents of client JAR
+echo_info "Checking contents of client-1.3.0.jar..."
+jar -tf "$CLIENT_JAR" | grep -E "\.(class|properties|xml)$" | head -20
 
 # Extract client JAR
 CLIENT_DIR="$WORK_DIR/client_extracted"
