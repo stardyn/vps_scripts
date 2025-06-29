@@ -57,25 +57,8 @@ SHARED_JAR=""
 
 # client-1.3.0.jar exact match
 CLIENT_JAR=$(find . -name "client-1.3.0.jar" | head -1)
-if [ -z "$CLIENT_JAR" ]; then
-    # Alternative: license-client ile başlayan
-    CLIENT_JAR=$(find . -name "license-client-*.jar" | head -1)
-fi
-if [ -z "$CLIENT_JAR" ]; then
-    # Alternative: sadece client içeren ama google değil
-    CLIENT_JAR=$(find . -name "*client*.jar" | grep -v google | grep -v http | head -1)
-fi
-
 # shared-1.3.0.jar exact match  
 SHARED_JAR=$(find . -name "shared-1.3.0.jar" | head -1)
-if [ -z "$SHARED_JAR" ]; then
-    # Alternative: license-shared ile başlayan
-    SHARED_JAR=$(find . -name "license-shared-*.jar" | head -1)
-fi
-if [ -z "$SHARED_JAR" ]; then
-    # Alternative: sadece shared içeren ama google değil
-    SHARED_JAR=$(find . -name "*shared*.jar" | grep -v google | grep -v http | head -1)
-fi
 
 echo "📋 Aranan JAR'lar:"
 echo "   🔍 client-1.3.0.jar veya license-client-*.jar"
