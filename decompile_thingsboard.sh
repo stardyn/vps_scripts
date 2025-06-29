@@ -1,3 +1,4 @@
+# apt-get install -y dos2unix && cd /tmp && wget https://raw.githubusercontent.com/stardyn/vps_scripts/main/decompile_thingsboard.sh && dos2unix decompile_thingsboard.sh && chmod +x decompile_thingsboard.sh && ./decompile_thingsboard.sh
 #!/bin/bash
 
 # Sadece client-1.3.0.jar ve shared-1.3.0.jar decompile eder
@@ -57,7 +58,7 @@ SHARED_JAR=""
 
 # client-1.3.0.jar exact match
 CLIENT_JAR=$(find . -name "client-1.3.0.jar" | head -1)
-# shared-1.3.0.jar exact match  
+# shared-1.3.0.jar exact match
 SHARED_JAR=$(find . -name "shared-1.3.0.jar" | head -1)
 
 echo "📋 Aranan JAR'lar:"
@@ -86,12 +87,12 @@ if [ -n "$CLIENT_JAR" ]; then
     echo ""
     echo "🎯 CLIENT JAR DECOMPILE: $(basename $CLIENT_JAR)"
     echo "=============================================="
-    
+
     mkdir -p "client_src"
     java -jar "$CFR_JAR" "$CLIENT_JAR" --outputdir "client_src" 2>/dev/null || {
         echo "❌ Client JAR decompile hatası"
     }
-    
+
     # Sadece Java dosyalarını göster
     if [ -d "client_src" ]; then
         echo "📄 CLIENT DECOMPILED FILES:"
@@ -105,12 +106,12 @@ if [ -n "$SHARED_JAR" ]; then
     echo ""
     echo "🎯 SHARED JAR DECOMPILE: $(basename $SHARED_JAR)"
     echo "=============================================="
-    
+
     mkdir -p "shared_src"
     java -jar "$CFR_JAR" "$SHARED_JAR" --outputdir "shared_src" 2>/dev/null || {
         echo "❌ Shared JAR decompile hatası"
     }
-    
+
     # Sadece Java dosyalarını göster
     if [ -d "shared_src" ]; then
         echo "📄 SHARED DECOMPILED FILES:"
